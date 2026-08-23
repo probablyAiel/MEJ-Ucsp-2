@@ -17,7 +17,6 @@
   button { font-family:inherit; cursor:pointer; }
 
   /* ---------- overlays ---------- */
-  #fx { position:fixed; inset:0; z-index:2; pointer-events:none; }
   #vignette {
     position:fixed; inset:0; z-index:3; pointer-events:none;
     background:radial-gradient(ellipse at center, transparent 55%, rgba(10,8,16,.55) 100%);
@@ -105,7 +104,7 @@
     padding:16px 22px;
   }
   .map-head h2 { font-family:Georgia, serif; font-size:22px; color:#f4e8cc; text-shadow:0 2px 6px rgba(0,0,0,.4); }
-  .map-stats { display:flex; gap:14px; font-size:13px; }
+  .map-stats { display:flex; gap:14px; font-size:13px; flex-wrap:wrap; }
   .stat-chip {
     background:rgba(20,24,40,.65); border:1px solid rgba(255,235,200,.25);
     padding:6px 12px; border-radius:20px; color:#f2e4c4;
@@ -146,21 +145,29 @@
 
   /* ---------- level scene ---------- */
   #screen-level { overflow:hidden; }
-  #bg { position:absolute; inset:0; }
-  .layer { position:absolute; inset:0; will-change:transform; }
-  #ly-sky { background:var(--sky); transition:background 1s ease; }
-  #ly-celestial { transition:transform .3s ease-out; }
-  .sun {
-    position:absolute; width:110px; height:110px; border-radius:50%;
-    background:var(--cel); left:72%; top:16%;
-    box-shadow:0 0 60px 24px var(--cel-glow);
-    opacity:.9;
+  #game {
+    position:absolute; inset:0; width:100%; height:100%;
+    image-rendering:pixelated; image-rendering:crisp-edges;
   }
-  #ly-far svg, #ly-mid svg, #ly-ground svg { position:absolute; bottom:0; left:0; width:100%; height:auto; display:block; }
-  #ly-far { transition:transform .3s ease-out; }
-  #ly-mid { transition:transform .3s ease-out; }
-  #ly-ground { bottom:0; top:auto; height:22vh; min-height:110px; transition:transform .3s ease-out; }
-  #ly-ground svg { height:100%; }
+  #prompt {
+    position:absolute; z-index:12; display:none;
+    background:rgba(28,22,18,.92); border:2px solid rgba(255,225,180,.4);
+    color:#ffe3b0; padding:6px 14px; border-radius:8px; font-size:13px;
+    transform:translate(-50%,-100%); white-space:nowrap;
+    pointer-events:none;
+  }
+  #prompt b { color:#ffd98a; }
+  #hint-bar {
+    position:absolute; bottom:10px; left:14px; z-index:12;
+    font-size:12px; color:rgba(240,230,210,.6);
+    background:rgba(20,24,40,.5); padding:5px 12px; border-radius:14px;
+  }
+  #toast {
+    position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:12;
+    background:rgba(28,22,18,.88); border:1px solid rgba(255,225,180,.35);
+    color:#ffe9c9; padding:9px 20px; border-radius:20px; font-size:13.5px;
+    display:none; transition:opacity .4s ease; pointer-events:none;
+  }
 
   /* dialogue box */
   #dialogue {
@@ -322,7 +329,7 @@
   /* hud during level */
   #hud {
     position:absolute; top:14px; right:16px; z-index:12;
-    display:flex; gap:8px; font-size:12px;
+    display:flex; gap:8px; font-size:12px; flex-wrap:wrap; justify-content:flex-end;
   }
   #hud .stat-chip { font-size:12px; }
   #hud .passive-chip { background:rgba(74,56,38,.8); border-color:rgba(255,227,176,.4); color:#ffe3b0; }
@@ -343,7 +350,6 @@
 </head>
 <body>
 
-<canvas id="fx"></canvas>
 <div id="vignette"></div>
 <div id="grain"></div>
 <div id="fader"></div>
@@ -359,7 +365,7 @@
       <button class="btn dark" id="btn-continue" disabled>Ituloy</button>
     </div>
   </div>
-  <div class="title-foot">UCSP project &middot; gumagana offline &middot; i-click ang "Simula" para magsimula</div>
+  <div class="title-foot">UCSP project &middot; gumagana offline &middot; keyboard ang gamit sa paglakad</div>
 </section>
 
 <!-- ======== CAREER PICKER ======== -->
@@ -385,16 +391,13 @@
 
 <!-- ======== LEVEL SCENE ======== -->
 <section id="screen-level" class="screen">
-  <div id="bg">
-    <div class="layer" id="ly-sky"></div>
-    <div class="layer" id="ly-celestial"><div class="sun"></div></div>
-    <div class="layer" id="ly-far"></div>
-    <div class="layer" id="ly-mid"></div>
-    <div class="layer" id="ly-ground"></div>
-  </div>
+  <canvas id="game"></canvas>
   <button id="quit-btn">&larr; Mapa</button>
   <div id="hud"></div>
-  <div id="dialogue">
+  <div id="prompt"></div>
+  <div id="toast"></div>
+  <div id="hint-bar">&#8592;/&#8594; o A/D &mdash; lumakad &nbsp;&middot;&nbsp; <b>E</b> &mdash; makipag-usap</div>
+  <div id="dialogue" style="display:none">
     <span class="dlg-speaker" id="dlg-speaker"></span>
     <div class="dlg-box">
       <div class="dlg-text" id="dlg-text"></div>
@@ -446,8 +449,8 @@
 
 <script>
 /* =========================================================
-   Lakbay Kinabukasan - single-file mini RPG
-   walang external dependencies, lahat local
+   Lakbay Kinabukasan - side-scrolling mini RPG
+   pixelated-but-HD, lahat local, walang dependencies
    ========================================================= */
 'use strict';
 
@@ -463,19 +466,36 @@ function loadState(){
 }
 function saveState(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
 
-/* ---------- careers ---------- */
 const CAREERS = ['Doktor','Guro','Inhinyero','Programmer','Chef','Accountant'];
 
 /* =========================================================
-   LEVEL DATA - lahat ng dialogue at activities dito
+   CHARACTER PALETTES
+   ========================================================= */
+const P = {
+  aiel:  { hair:'#181210', skin:'#d09a6a', top:'#f2ede2', bottom:'#37415e', bag:'#8a4a3a' },
+  nanay: { hair:'#3a2a20', skin:'#c98a5a', top:'#c95a6a', bottom:'#7a4a58', dress:true, long:true },
+  tatay: { hair:'#2a2018', skin:'#b87a4a', top:'#e8e0d0', bottom:'#4a5a78' },
+  raffy: { hair:'#1a1410', skin:'#c98a5a', top:'#4a8ac9', bottom:'#3a3a42' },
+  maam:  { hair:'#4a3020', skin:'#d09a6a', top:'#f0e8d8', bottom:'#5a4a6a', skirt:true, long:true },
+  marco: { hair:'#2a2018', skin:'#b87a4a', top:'#c97a2a', bottom:'#4a4a52' },
+  ben:   { hair:'#888078', skin:'#b87a4a', top:'#e8e0c8', bottom:'#5a5040' },
+  nena:  { hair:'#3a2a20', skin:'#c98a5a', top:'#d9a03f', bottom:'#8a5a4a', dress:true, long:true },
+  kap:   { hair:'#2a2018', skin:'#c08a5a', top:'#f0ead8', bottom:'#2a3a5a' },
+  stud:  { hair:'#1a1410', skin:'#c98a5a', top:'#e8e8e8', bottom:'#2a3a5a' },
+  kid:   { hair:'#2a2018', skin:'#d09a6a', top:'#d97a4a', bottom:'#4a5a38', small:true },
+  tita:  { hair:'#5a4030', skin:'#c98a5a', top:'#7ac9a0', bottom:'#8a6a5a', dress:true, long:true },
+  proct: { hair:'#3a3038', skin:'#c08a5a', top:'#5a5a72', bottom:'#2a2a38' }
+};
+
+/* =========================================================
+   LEVEL DATA
    ========================================================= */
 const LEVELS = [
 /* ---- 1 ---- */
 {
-  n:1, name:'Home Village', short:'Home Village', kind:'Impormal na Edukasyon',
+  n:1, name:'Home Village', short:'Home Village',
   theme:'village',
-  pal:{ sky:'linear-gradient(#ffd9a0,#ff9e6d)', cel:'#ffcf6f', celGlow:'rgba(255,207,111,.5)',
-        far:'#7fae7a', mid:'#5c8f5f', ground:'#4a7a52', fx:'#ffe9b0' },
+  obj:'Hanapin si Nanay sa loob ng village.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Sabado ng umaga. Amoy sinangag at tsokolaten mula sa kusina. Kahapon pa sira ang gripo, kaya alam mo nang may ipapagawa si Nanay.' },
     { sp:'Nanay', t:'Uy, gising na pala! Kumain ka muna, anak. Pero bago yan... pakikuha nga ako ng tubig sa poso, please?' },
@@ -504,12 +524,11 @@ const LEVELS = [
 },
 /* ---- 2 ---- */
 {
-  n:2, name:'Peer Neighborhood', short:'Peer Neighborhood', kind:'Impormal na Edukasyon',
+  n:2, name:'Peer Neighborhood', short:'Peer Neighborhood',
   theme:'hood',
-  pal:{ sky:'linear-gradient(#ffe9b8,#f6a86b)', cel:'#ffbe6f', celGlow:'rgba(255,190,111,.45)',
-        far:'#8fb98a', mid:'#63976a', ground:'#557f57', fx:'#ffd9a0' },
+  obj:'Hanapin si Kuya Raffy sa may basketball court.',
   intro:[
-    { sp:'Tagapagsalaysay', t:'Hapon sa kanto. Naroon si Kuya Raffy at ang barkada, tambay sa may sari-sari store gaya ng dati.' },
+    { sp:'Tagapagsalaysay', t:'Hapon sa kanto. Naroon si Kuya Raffy at ang barkada, tambay sa may court gaya ng dati.' },
     { sp:'Kuya Raffy', t:'Uy, eto na nga pala! May problema ako eh... group project namin, tapos yung isang kasama ko, sobrang hirap makasunod sa lesson. Iniwan na lang siya ng grupo.' },
     { sp:'Ikaw', t:'Ah ganun ba... Ano plano niyo?' },
     { sp:'Kuya Raffy', t:'Yun nga, iniisip ko. Ikaw kasi matalino ka eh - ano sa tingin mo ang dapat gawin sa katulad niyang sitwasyon?' }
@@ -536,14 +555,15 @@ const LEVELS = [
 },
 /* ---- 3 ---- */
 {
-  n:3, name:'Digital Realm', short:'Digital Realm', kind:'Impormal na Edukasyon',
+  n:3, name:'Digital Realm', short:'Digital Realm',
   theme:'digital',
-  pal:{ sky:'linear-gradient(#1b1f3f,#3d2b63)', cel:'#cfd8ff', celGlow:'rgba(207,216,255,.35)',
-        far:'#2a2f5e', mid:'#232850', ground:'#191c38', fx:'#8fd8ff' },
+  obj:'Hanapin si Kuya Streamer sa gitna ng neon towers.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Gabi na. Dapat tulog ka na, pero hawak mo pa rin ang phone mo. Scrolling ka sa feed habang kumikislap ang mga notification.' },
     { sp:'Ikaw', t:'Grabe ang daming balita ngayon ah... Alin kaya dito ang totoo?' },
-    { sp:'Tagapagsalaysay', t:'Sa mundong digital, hindi lahat ng nakikita ay totoo. Subukan mong kilalanin - alin ang FACT, alin ang FAKE?' }
+    { sp:'Kuya Streamer', t:'Uy, parekoy! Scrolling ka rin ba? Wag kang basta maniwala diyan ha - sa mundong digital, hindi lahat ng nakikita ay totoo!' },
+    { sp:'Ikaw', t:'Eh paano ko malalaman kung alin ang fact at alin ang fake?' },
+    { sp:'Kuya Streamer', t:'Ayun ang tanong! Subukan natin - babasahin ko sa\'yo ang mga post, ikaw ang humusga.' }
   ],
   act:{
     type:'quiz', title:'Fact o Fake?', style:'factfake',
@@ -564,19 +584,19 @@ const LEVELS = [
   },
   outro:[
     { sp:'Ikaw', t:'Buti nalang nacheck ko... Delikado pala mag-share nang basta-basta.' },
+    { sp:'Kuya Streamer', t:'Yan! Media literacy, parekoy. Ishare mo yan... yung aral, hindi yung fake news.' },
     { sp:'Tagapagsalaysay', t:'+Knowledge! Sa digital na mundo, natutunan mong maging mapanuri sa media at impormasyon.' }
   ],
   gain:{ knowledge:15 }
 },
 /* ---- 4 ---- */
 {
-  n:4, name:'Shrine ng Isip', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  n:4, name:'Shrine ng Isip', short:'Stat Boost Stop',
   theme:'shrine',
-  pal:{ sky:'linear-gradient(#cfe8e4,#8fc6bd)', cel:'#f6f0d0', celGlow:'rgba(246,240,208,.4)',
-        far:'#7aa89b', mid:'#5d8f83', ground:'#4c7a6f', fx:'#d0f0e0' },
+  obj:'Hanapin si Mang Ben sa may torii gate.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Sa pagitan ng dalawang bundok, may lihim na lugar - isang shrine na sinaunang nakaukit ang mga salita: "Ang problemang hindi hinaharap, kasama mo habambuhay."' },
-    { sp:'Mang Ben, Tagabantay ng Shrine', t:'Maligayang pagdating, batang lakwatsero. Bago kita bigyan ng kapangyarihang Problem-Solving, kailangan mong patunayan na kaya mong itugma ang bawat suliranin sa tamang lunas.' },
+    { sp:'Mang Ben', t:'Maligayang pagdating, batang lakwatsero. Bago kita bigyan ng kapangyarihang Problem-Solving, kailangan mong patunayan na kaya mong itugma ang bawat suliranin sa tamang lunas.' },
     { sp:'Ikaw', t:'Handa po ako, Mang Ben.' },
     { sp:'Mang Ben', t:'Marahil. I-click ang isang suliranin, at pagkatapos ang tamang solusyon sa kabilang panig.' }
   ],
@@ -584,7 +604,7 @@ const LEVELS = [
     type:'match', title:'Pagtugma ng Suliranin at Lunas',
     pairs:[
       { l:'Flat tire ang bisikleta mo papuntang paaralan', r:'Ayusin o palitan ang gulong bago umalis' },
-      { l:'Hindi mo maintindihan ang math lesson', l2:true, r:'Mag-review nang mabuti at magtanong sa titser' },
+      { l:'Hindi mo maintindihan ang math lesson', r:'Mag-review nang mabuti at magtanong sa titser' },
       { l:'Nawalan ng kuryente habang nagta-type ka ng assignment', r:'I-save regularly at gumamit ng power bank' },
       { l:'Nalilito ka sa dami ng school requirements', r:'Gumawa ng checklist at planner' }
     ]
@@ -597,15 +617,14 @@ const LEVELS = [
 },
 /* ---- 5 ---- */
 {
-  n:5, name:'Classroom Dungeons I', short:'Classroom Dungeons', kind:'Formal na Edukasyon',
+  n:5, name:'Classroom Dungeons I', short:'Classroom Dungeons',
   theme:'school',
-  pal:{ sky:'linear-gradient(#b8cfe8,#e8d9b8)', cel:'#fff0c0', celGlow:'rgba(255,240,192,.4)',
-        far:'#8aa0b8', mid:'#6d84a0', ground:'#5a6f88', fx:'#e8e0c0' },
+  obj:"Pasok sa paaralan - hanapin si Ma'am Santos.",
   intro:[
     { sp:'Tagapagsalaysay', t:'Ang pinto ng silid-aralan ay tila pintong yelo sa loob ng dungeon. Ngunit sa halip na monsters, naroon ang blackboard, chalk, at isang titser na may dala-dalang questionnaire.' },
-    { sp:'Ma\'am Santos', t:'Pasok! Oho, huwag kang matakot. Ang tunay na kalaban sa classroom dungeon ay ang hindi pag-aaral. Handa ka na ba sa quiz battle?' },
-    { sp:'Ikaw', t:'Po... handa na po, Ma\'am!' },
-    { sp:'Ma\'am Santos', t:'Sige. Simpleng warm-up muna. Kapag nalampasan mo ito, mas mahihirap pa ang susunod.' }
+    { sp:"Ma'am Santos", t:'Pasok! Oho, huwag kang matakot. Ang tunay na kalaban sa classroom dungeon ay ang hindi pag-aaral. Handa ka na ba sa quiz battle?' },
+    { sp:'Ikaw', t:"Po... handa na po, Ma'am!" },
+    { sp:"Ma'am Santos", t:'Sige. Simpleng warm-up muna. Kapag nalampasan mo ito, mas mahihirap pa ang susunod.' }
   ],
   act:{
     type:'quiz', title:'Quiz Battle: Warm-Up',
@@ -625,17 +644,16 @@ const LEVELS = [
     ]
   },
   outro:[
-    { sp:'Ma\'am Santos', t:'Very good! Nakita ko ang iyong effort. Ito ang simula pa lamang - sa susunod na dungeon, mas challenging.' },
+    { sp:"Ma'am Santos", t:'Very good! Nakita ko ang iyong effort. Ito ang simula pa lamang - sa susunod na dungeon, mas challenging.' },
     { sp:'Tagapagsalaysay', t:'+Knowledge! Ang formal education ay nagsisimula sa classroom - aral, pagsusulit, at tiyaga.' }
   ],
   gain:{ knowledge:15 }
 },
 /* ---- 6 ---- */
 {
-  n:6, name:'Skill Workshops I', short:'Skill Workshops', kind:'Non-Formal na Edukasyon',
+  n:6, name:'Skill Workshops I', short:'Skill Workshops',
   theme:'workshop',
-  pal:{ sky:'linear-gradient(#3a2f28,#7a4f33)', cel:'#ffb060', celGlow:'rgba(255,176,96,.35)',
-        far:'#4f3d30', mid:'#3d2f26', ground:'#33281f', fx:'#ffc890' },
+  obj:'Hanapin si Trainer Marco sa workshop.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Amoy kahoy at mainit na bakal ang hangin. Sa loob ng workshop, kumikislap ang mga kagamitan at naririnig ang tunog ng mga nag-aaral ng praktikal na skills.' },
     { sp:'Trainer Marco', t:'O, welcome sa workshop! Dito sa TESDA-style training, hindi lang teorya ang usapan - praktikal na kasanayan ang kailangan.' },
@@ -660,13 +678,12 @@ const LEVELS = [
 },
 /* ---- 7 ---- */
 {
-  n:7, name:'Dawn Shrine', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  n:7, name:'Dawn Shrine', short:'Stat Boost Stop',
   theme:'dawn',
-  pal:{ sky:'linear-gradient(#f6c6cf,#f9e2c0)', cel:'#fff0d8', celGlow:'rgba(255,240,216,.5)',
-        far:'#c98f9b', mid:'#a06f80', ground:'#8a5f70', fx:'#ffe0e8' },
+  obj:'Umakyat sa burol - hanapin si Aling Nena sa dawn shrine.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Madaling-araw. Ang ikalawang shrine ay nasa tuktok ng burol, kung saan unang tumatama ang sikat ng araw. Nakaukit dito: "Ang karakter ay kung ano ang ginagawa mo kapag walang nanonood."' },
-    { sp:'Aling Nena, Tagabantay ng Shrine', t:'Halika, iho/iha. Ang ikalawang pasada ay ukol sa karakter. Hindi ito nasusukat sa grades - nasusukat sa mga desisyon mo kapag walang nakakakita.' },
+    { sp:'Aling Nena', t:'Halika, iho/iha. Ang ikalawang pasada ay ukol sa karakter. Hindi ito nasusukat sa grades - nasusukat sa mga desisyon mo kapag walang nakakakita.' },
     { sp:'Ikaw', t:'Paano ko po ito mapapatunayan?' },
     { sp:'Aling Nena', t:'Sagutin mo ang mga sitwasyon. Totohanan, ha. Wag yung sagot na alam mong gusto kong marinig.' }
   ],
@@ -692,15 +709,14 @@ const LEVELS = [
 },
 /* ---- 8 ---- */
 {
-  n:8, name:'Classroom Dungeons II', short:'Classroom Dungeons', kind:'Formal na Edukasyon',
+  n:8, name:'Classroom Dungeons II', short:'Classroom Dungeons',
   theme:'deep',
-  pal:{ sky:'linear-gradient(#2a3050,#4a4068)', cel:'#e0d8f0', celGlow:'rgba(224,216,240,.3)',
-        far:'#333a5e', mid:'#282e4c', ground:'#20243c', fx:'#b0a8e0' },
+  obj:"Bumaba sa deep floor - hanapin ulit si Ma'am Santos.",
   intro:[
     { sp:'Tagapagsalaysay', t:'Mas malalim na antas ng dungeon. Mas madilim, mas malamig, at ang mga tanong sa dingding ay tila gumagalaw.' },
-    { sp:'Ma\'am Santos', t:'Balik ka ulit! Ngayon naman, medyo mapapasubok ka na. Mixed subjects ito - history, science, math. Ready?' },
-    { sp:'Ikaw', t:'Sige po, Ma\'am. Kaya ko po ito.' },
-    { sp:'Ma\'am Santos', t:'Yan ang spirit! Tandaan: hindi ka bobo kapag nagkamali. Bobo ka lang kapag tumigil kang matuto.' }
+    { sp:"Ma'am Santos", t:'Balik ka ulit! Ngayon naman, medyo mapapasubok ka na. Mixed subjects ito - history, science, math. Ready?' },
+    { sp:'Ikaw', t:"Sige po, Ma'am. Kaya ko po ito." },
+    { sp:"Ma'am Santos", t:'Yan ang spirit! Tandaan: hindi ka bobo kapag nagkamali. Bobo ka lang kapag tumigil kang matuto.' }
   ],
   act:{
     type:'quiz', title:'Quiz Battle: Deep Floor',
@@ -720,17 +736,16 @@ const LEVELS = [
     ]
   },
   outro:[
-    { sp:'Ma\'am Santos', t:'Very good! Lumalalim na ang kaalaman mo. Konting push na lang at ready ka na sa mas malalaking hamon.' },
+    { sp:"Ma'am Santos", t:'Very good! Lumalalim na ang kaalaman mo. Konting push na lang at ready ka na sa mas malalaking hamon.' },
     { sp:'Tagapagsalaysay', t:'+Knowledge! Ang formal education ay hagdan-hagdanan - bawat antas ay mas mataas na lebel ng pagkatuto.' }
   ],
   gain:{ knowledge:15 }
 },
 /* ---- 9 ---- */
 {
-  n:9, name:'Skill Workshops II', short:'Skill Workshops', kind:'Non-Formal na Edukasyon',
+  n:9, name:'Skill Workshops II', short:'Skill Workshops',
   theme:'forge',
-  pal:{ sky:'linear-gradient(#4a3524,#8f5a35)', cel:'#ffa860', celGlow:'rgba(255,168,96,.4)',
-        far:'#5a4030', mid:'#463222', ground:'#3a2a1e', fx:'#ffc890' },
+  obj:'Balik sa workshop - hanapin si Trainer Marco sa forge section.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Ang advanced section ng workshop. Dito, hindi na sunod-sunod na hakbang ang pinag-uusapan - kundi paggamit ng skills sa totoong sitwasyon.' },
     { sp:'Trainer Marco', t:'Balik! Ngayon, situational na tayo. Bibigyan kita ng mga tunay na problema - tingnan natin kung magagamit mo ang natutunan mo.' },
@@ -759,13 +774,12 @@ const LEVELS = [
 },
 /* ---- 10 ---- */
 {
-  n:10, name:'Plaza ng Bayan', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  n:10, name:'Plaza ng Bayan', short:'Stat Boost Stop',
   theme:'plaza',
-  pal:{ sky:'linear-gradient(#ffe3a8,#ffc07a)', cel:'#fff0b8', celGlow:'rgba(255,240,184,.5)',
-        far:'#a8bf8a', mid:'#7fa06a', ground:'#6a8a5c', fx:'#fff0c0' },
+  obj:'Punta sa plaza - hanapin si Kap. Reyes.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Sa harap ng barangay hall, may huling shrine - hindi ito gawa sa bato, kundi gawa sa prinsipyo. Nakaukit: "Ang edukasyong hindi nakikinabang ang bayan ay kulang pa."' },
-    { sp:'Kap. Reyes, Tagabantay ng Plaza', t:'Huling pasada, anak. Ang civic awareness - pag-unawa sa iyong tungkulin bilang mamamayan. Hindi ito optional sa lipunan natin.' },
+    { sp:'Kap. Reyes', t:'Huling pasada, anak. Ang civic awareness - pag-unawa sa iyong tungkulin bilang mamamayan. Hindi ito optional sa lipunan natin.' },
     { sp:'Ikaw', t:'Ano po ang mga tanong, Kap?' },
     { sp:'Kap. Reyes', t:'Mga sitwasyon sa komunidad. Sagutin mo nang tapat, at malalaman mo kung handa ka nang maging aktibong mamamayan.' }
   ],
@@ -791,15 +805,14 @@ const LEVELS = [
 },
 /* ---- 11 ---- */
 {
-  n:11, name:'Final Career Challenge', short:'Final Challenge', kind:'Final Exam',
+  n:11, name:'Final Career Challenge', short:'Final Challenge',
   theme:'exam',
-  pal:{ sky:'linear-gradient(#1f2333,#3a2740)', cel:'#e0d8f0', celGlow:'rgba(224,216,240,.3)',
-        far:'#2c3048', mid:'#232741', ground:'#1a1d2e', fx:'#e0a0a0' },
+  obj:'Ang huling tarangkahan - hanapin ang Proctor.',
   intro:[
     { sp:'Tagapagsalaysay', t:'Ang huling tarangkahan. Walang bida-bida, walang shortcut. Ang nakasulat sa pinto: "DITO NASUSUBOK ANG LAHAT NG NATUTUNAN MO."' },
     { sp:'Tagapagsalaysay', t:'Ang Final Career Challenge - isang pagsusulit na tumutugma sa tunay na mundo. May oras bawat tanong. Kailangan ang lahat: kaalaman, kasanayan, valores, at ang tatlong passive powers mo.' },
     { sp:'Ikaw', t:'Kinakabahan ako... pero handa na ako. Dala-dala ko lahat ng aral mula sa pamilya, barkada, paaralan, at komunidad.' },
-    { sp:'Tagapagsalaysay', t:'Simula na. Bawat tanong, may takdang oras. Focus.' }
+    { sp:'Proctor', t:'Maupo ka. Bawat tanong, may takdang oras. Kapag ubos na ang oras, ubos na rin ang tanong. Simula... ngayon.' }
   ],
   act:{
     type:'quiz', title:'FINAL EXAM: Career Readiness', timer:20,
@@ -832,10 +845,9 @@ const LEVELS = [
 },
 /* ---- 12 ---- */
 {
-  n:12, name:'Victory Arch', short:'Victory Arch', kind:'Wakas',
+  n:12, name:'Victory Arch', short:'Victory Arch',
   theme:'victory',
-  pal:{ sky:'linear-gradient(#ffe9b0,#ffb36b)', cel:'#fff0b0', celGlow:'rgba(255,240,176,.6)',
-        far:'#e0b070', mid:'#c08f5f', ground:'#a87f50', fx:'#fff0c0' },
+  obj:'Lakarin ang daan papunta sa Victory Arch.',
   intro:[
     { sp:'Tagapagsalaysay', t:'At narito ka na. Ang Victory Arch - gintong tarangkahan sa simula ng iyong pangarap. Bawat hakbang mula sa Home Village hanggang dito, may saysay.' },
     { sp:'Ikaw', t:'Grabe... Parang kahapon, tinutulungan ko lang si Nanay mag-igib ng tubig. Ngayon, eto na ako.' },
@@ -861,184 +873,671 @@ function fade(cb){
 }
 
 /* =========================================================
-   BACKGROUND SCENES
+   SIDE-SCROLL ENGINE
    ========================================================= */
-function hillsSVG(color, amp){
-  // simple rolling hills silhouette
-  return `<svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="height:34vh;">
-    <path d="M0 300 L0 ${180-amp} Q125 ${120-amp} 250 ${170-amp} Q375 ${220-amp} 500 ${150-amp} Q625 ${90-amp} 750 ${160-amp} Q875 ${230-amp} 1000 ${140-amp} L1000 300 Z" fill="${color}"/>
-  </svg>`;
-}
-function groundSVG(color){
-  return `<svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="height:100%;">
-    <rect width="1000" height="100" fill="${color}"/>
-    <path d="M0 0 Q250 14 500 4 Q750 -6 1000 10 L1000 0 Z" fill="rgba(255,255,255,.06)"/>
-  </svg>`;
-}
-function propsSVG(theme){
-  switch(theme){
-    case 'village': return `
-      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
-        <g fill="#3a2c22">
-          <path d="M120 260 L120 190 L90 190 L160 140 L230 190 L200 190 L200 260 Z"/>
-          <path d="M420 260 L420 175 L385 175 L460 118 L535 175 L500 175 L500 260 Z"/>
-          <rect x="700" y="185" width="120" height="75"/>
-          <path d="M690 185 L760 135 L830 185 Z"/>
-        </g>
-        <g fill="#ffd98a" opacity=".85">
-          <rect x="145" y="205" width="16" height="16"/><rect x="445" y="195" width="16" height="16"/><rect x="735" y="205" width="16" height="16"/>
-        </g>
-      </svg>`;
-    case 'hood': return `
-      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
-        <g fill="#4a3038">
-          <rect x="80" y="170" width="150" height="90"/><path d="M70 170 L155 115 L240 170 Z"/>
-          <rect x="330" y="150" width="180" height="110"/><path d="M320 150 L420 90 L520 150 Z"/>
-          <rect x="640" y="180" width="140" height="80"/><path d="M630 180 L710 128 L790 180 Z"/>
-        </g>
-        <text x="360" y="215" font-size="20" fill="#ffe9c9" font-family="Georgia" font-style="italic">SARI-SARI STORE</text>
-        <g fill="#ffd98a" opacity=".85">
-          <rect x="115" y="195" width="15" height="15"/><rect x="380" y="180" width="15" height="15"/><rect x="680" y="200" width="15" height="15"/>
-        </g>
-      </svg>`;
-    case 'digital': return `
-      <svg viewBox="0 0 1000 280" preserveAspectRatio="xMidYMax meet" style="height:28vh;">
-        <g fill="#141830">
-          <rect x="100" y="80" width="90" height="200"/><rect x="230" y="130" width="70" height="150"/>
-          <rect x="430" y="50" width="110" height="230"/><rect x="600" y="120" width="80" height="160"/>
-          <rect x="760" y="90" width="95" height="190"/>
-        </g>
-        <g fill="#59e0d0" opacity=".8">
-          <rect x="112" y="100" width="8" height="8"/><rect x="132" y="120" width="8" height="8"/><rect x="152" y="100" width="8" height="8"/>
-          <rect x="448" y="80" width="8" height="8"/><rect x="472" y="105" width="8" height="8"/><rect x="496" y="80" width="8" height="8"/>
-          <rect x="778" y="115" width="8" height="8"/><rect x="800" y="140" width="8" height="8"/>
-        </g>
-        <line x1="485" y1="50" x2="485" y2="18" stroke="#59e0d0" stroke-width="3"/><circle cx="485" cy="14" r="5" fill="#ff6a8a"/>
-      </svg>`;
-    case 'shrine': case 'dawn': return `
-      <svg viewBox="0 0 1000 280" preserveAspectRatio="xMidYMax meet" style="height:28vh;">
-        <g fill="${theme==='shrine' ? '#3f6a5f' : '#7a4a58'}">
-          <rect x="330" y="120" width="340" height="18" rx="6"/>
-          <rect x="352" y="150" width="296" height="12" rx="5"/>
-          <rect x="370" y="120" width="26" height="160"/>
-          <rect x="604" y="120" width="26" height="160"/>
-        </g>
-        <path d="M480 280 L480 240 Q480 218 500 218 Q520 218 520 240 L520 280 Z" fill="#2a2018"/>
-      </svg>`;
-    case 'school': case 'deep': return `
-      <svg viewBox="0 0 1000 270" preserveAspectRatio="xMidYMax meet" style="height:27vh;">
-        <g fill="${theme==='school' ? '#4a4258' : '#1c2038'}">
-          <rect x="300" y="120" width="400" height="150"/>
-          <path d="M290 120 L500 55 L710 120 Z"/>
-          <rect x="470" y="20" width="8" height="45"/>
-          <path d="M478 22 L530 32 L478 44 Z" fill="#c94a4a"/>
-          <rect x="470" y="190" width="60" height="80" fill="${theme==='school' ? '#2e2838' : '#12142a'}"/>
-        </g>
-        <g fill="#ffd98a" opacity=".8">
-          <rect x="340" y="150" width="26" height="30"/><rect x="400" y="150" width="26" height="30"/>
-          <rect x="580" y="150" width="26" height="30"/><rect x="640" y="150" width="26" height="30"/>
-        </g>
-      </svg>`;
-    case 'workshop': case 'forge': return `
-      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
-        <g fill="#2a2018">
-          <rect x="280" y="140" width="440" height="120"/>
-          <path d="M270 140 L500 70 L730 140 Z"/>
-          <rect x="460" y="180" width="80" height="80" fill="#ffb060" opacity=".55"/>
-        </g>
-        <circle cx="800" cy="200" r="42" fill="none" stroke="#4a3826" stroke-width="12"/>
-        <g fill="#4a3826">
-          <rect x="792" y="148" width="16" height="20"/><rect x="792" y="232" width="16" height="20"/>
-          <rect x="748" y="192" width="20" height="16"/><rect x="832" y="192" width="20" height="16"/>
-        </g>
-        <line x1="200" y1="120" x2="200" y2="260" stroke="#2a2018" stroke-width="10"/>
-        <path d="M200 120 L260 145 L200 170 Z" fill="#ffb060" opacity=".7"/>
-      </svg>`;
-    case 'plaza': return `
-      <svg viewBox="0 0 1000 270" preserveAspectRatio="xMidYMax meet" style="height:27vh;">
-        <g fill="#5a4a30">
-          <rect x="120" y="150" width="24" height="120"/><circle cx="132" cy="130" r="42"/>
-          <rect x="860" y="150" width="24" height="120"/><circle cx="872" cy="130" r="42"/>
-          <rect x="420" y="110" width="160" height="160" fill="#6a5638"/>
-          <path d="M405 110 L500 60 L595 110 Z" fill="#5a4a30"/>
-        </g>
-        <rect x="455" y="160" width="90" height="50" fill="#ffd98a" opacity=".7"/>
-      </svg>`;
-    case 'exam': return `
-      <svg viewBox="0 0 1000 290" preserveAspectRatio="xMidYMax meet" style="height:29vh;">
-        <g fill="#181c30">
-          <rect x="420" y="60" width="160" height="230"/>
-          <path d="M410 60 L500 15 L590 60 Z"/>
-          <circle cx="500" cy="120" r="34" fill="#232741" stroke="#e0a0a0" stroke-width="4"/>
-          <line x1="500" y1="120" x2="500" y2="100" stroke="#e0a0a0" stroke-width="3"/>
-          <line x1="500" y1="120" x2="514" y2="126" stroke="#e0a0a0" stroke-width="3"/>
-        </g>
-        <rect x="470" y="200" width="60" height="90" fill="#0e1020"/>
-      </svg>`;
-    case 'victory': return `
-      <svg viewBox="0 0 1000 300" preserveAspectRatio="xMidYMax meet" style="height:30vh;">
-        <g fill="#b8863a">
-          <rect x="330" y="90" width="46" height="210"/><rect x="624" y="90" width="46" height="210"/>
-          <rect x="310" y="70" width="380" height="30" rx="8"/>
-          <rect x="340" y="112" width="320" height="14" rx="6"/>
-        </g>
-        <circle cx="500" cy="52" r="14" fill="#fff0b8"/>
-        <path d="M470 300 L470 220 Q500 190 530 220 L530 300 Z" fill="#8a6a30"/>
-      </svg>`;
-  }
-  return '';
-}
+const SCALE = 3;
+const cv = $('#game');
+const g = cv.getContext('2d');
+let VW = 0, VH = 0;
 
-function setScene(lvl){
-  const p = lvl.pal;
-  $('#ly-sky').style.background = p.sky;
-  const sun = $('#ly-celestial .sun');
-  sun.style.background = p.cel;
-  sun.style.boxShadow = `0 0 60px 24px ${p.celGlow}`;
-  $('#ly-far').innerHTML = hillsSVG(p.far, 0);
-  $('#ly-mid').innerHTML = hillsSVG(p.mid, 20) + propsSVG(lvl.theme);
-  $('#ly-ground').innerHTML = groundSVG(p.ground);
-  FX.color = p.fx;
+function resizeGame(){
+  cv.width = Math.max(320, Math.ceil(innerWidth / SCALE));
+  cv.height = Math.max(200, Math.ceil(innerHeight / SCALE));
+  VW = cv.width; VH = cv.height;
 }
+window.addEventListener('resize', resizeGame);
 
-/* parallax */
-document.addEventListener('mousemove', e => {
-  const nx = (e.clientX / window.innerWidth - .5);
-  const ny = (e.clientY / window.innerHeight - .5);
-  $('#ly-far').style.transform = `translate(${nx*-12}px, ${ny*-4}px)`;
-  $('#ly-mid').style.transform = `translate(${nx*-24}px, ${ny*-8}px)`;
-  $('#ly-celestial').style.transform = `translate(${nx*-8}px, ${ny*-3}px)`;
+const G = {
+  running:false, lvl:null, scene:null, camX:0, t:0, last:0,
+  player:{ x:120, vx:0, face:1, phase:0, moving:false },
+  npcs:[], props:[], worldW:2600, stars:[], clouds:[], motes:[]
+};
+
+/* input */
+const keys = {};
+window.addEventListener('keydown', e => {
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if((e.code==='KeyE'||e.code==='Enter'||e.code==='Space') && G.running && !isLocked()) tryInteract();
 });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-/* =========================================================
-   PARTICLES (canvas)
-   ========================================================= */
-const FX = { color:'#ffe9b0', parts:[], cv:null, ctx:null };
-function initFX(){
-  FX.cv = $('#fx'); FX.ctx = FX.cv.getContext('2d');
-  resizeFX(); window.addEventListener('resize', resizeFX);
-  for(let i=0;i<45;i++) FX.parts.push(newPart(true));
-  requestAnimationFrame(fxLoop);
+function isLocked(){
+  return $('#dialogue').style.display !== 'none'
+      || $('#activity').classList.contains('active')
+      || $('#reward-overlay').classList.contains('active');
 }
-function resizeFX(){ FX.cv.width = innerWidth; FX.cv.height = innerHeight; }
-function newPart(anywhere){
-  return { x:Math.random()*innerWidth, y:anywhere?Math.random()*innerHeight:innerHeight+10,
-    r:.8+Math.random()*2.2, vy:.15+Math.random()*.4, vx:(Math.random()-.5)*.25,
-    a:.15+Math.random()*.4, ph:Math.random()*Math.PI*2 };
-}
-function fxLoop(t){
-  const c = FX.ctx;
-  c.clearRect(0,0,FX.cv.width,FX.cv.height);
-  for(let i=0;i<FX.parts.length;i++){
-    const p = FX.parts[i];
-    p.y -= p.vy; p.x += p.vx + Math.sin(t/1400+p.ph)*.18;
-    if(p.y < -12) FX.parts[i] = newPart(false);
-    c.globalAlpha = p.a * (0.7 + 0.3*Math.sin(t/900+p.ph));
-    c.fillStyle = FX.color;
-    c.beginPath(); c.arc(p.x,p.y,p.r,0,Math.PI*2); c.fill();
+
+/* deterministic hash for texture speckles */
+function hash(n){ const x = Math.sin(n*127.1)*43758.5453; return x - Math.floor(x); }
+
+/* ---------- palettes per theme ---------- */
+const PAL = {
+  village:{ top:'#ffd9a0', bot:'#ff9e6d', cel:'#ffcf6f', far:'#b7cf9e', mid:'#7fae7a', ground:'#55854f', dirt:'#6a5a3a', fx:'#ffe9b0', night:false },
+  hood:   { top:'#ffe9b8', bot:'#f6a86b', cel:'#ffbe6f', far:'#c2c79a', mid:'#8fb98a', ground:'#5f8a58', dirt:'#6a5a3a', fx:'#ffd9a0', night:false },
+  digital:{ top:'#14162e', bot:'#34245c', cel:'#cfd8ff', far:'#262a52', mid:'#1e2244', ground:'#16182e', dirt:'#20243e', fx:'#8fd8ff', night:true, neon:'#59e0d0' },
+  shrine: { top:'#cfe8e4', bot:'#8fc6bd', cel:'#f6f0d0', far:'#9cc4b4', mid:'#6fa394', ground:'#4c7a6f', dirt:'#5a6a58', fx:'#d0f0e0', night:false },
+  school: { top:'#b8cfe8', bot:'#ead9b8', cel:'#fff0c0', far:'#a8bcd0', mid:'#7d93ac', ground:'#5a6f88', dirt:'#4a4258', fx:'#e8e0c0', night:false },
+  workshop:{ top:'#3a2f28', bot:'#7a4f33', cel:'#ffb060', far:'#54423a', mid:'#3d2f26', ground:'#33281f', dirt:'#4a3826', fx:'#ffc890', night:true },
+  dawn:   { top:'#f6c6cf', bot:'#f9e2c0', cel:'#fff0d8', far:'#d8aab0', mid:'#a06f80', ground:'#8a5f70', dirt:'#7a5060', fx:'#ffe0e8', night:false },
+  deep:   { top:'#232848', bot:'#3c3460', cel:'#e0d8f0', far:'#333a5e', mid:'#282e4c', ground:'#20243c', dirt:'#2a2e4a', fx:'#b0a8e0', night:true },
+  forge:  { top:'#4a3524', bot:'#8f5a35', cel:'#ffa860', far:'#6a4c38', mid:'#463222', ground:'#3a2a1e', dirt:'#4a3626', fx:'#ffc890', night:true },
+  plaza:  { top:'#ffe3a8', bot:'#ffc07a', cel:'#fff0b8', far:'#c2cc96', mid:'#8aa874', ground:'#6a8a5c', dirt:'#7a6a4a', fx:'#fff0c0', night:false },
+  exam:   { top:'#1f2333', bot:'#3a2740', cel:'#e0d8f0', far:'#2c3048', mid:'#232741', ground:'#1a1d2e', dirt:'#242840', fx:'#e0a0a0', night:true },
+  victory:{ top:'#ffe9b0', bot:'#ffb36b', cel:'#fff0b0', far:'#ecc98a', mid:'#c08f5f', ground:'#a87f50', dirt:'#8a6a40', fx:'#fff0c0', night:false }
+};
+
+/* ---------- scenes: props + npcs per level ---------- */
+const SCENES = {
+  village:{
+    props:[['house',380],['tree',650],['bush',820],['house',1050],['jeepney',1450],['tree',1750],['bush',1950],['house',2250],['tree',2550]],
+    npcs:[
+      { x:1180, name:'Nanay', pal:P.nanay, quest:true },
+      { x:1520, name:'Aling Rosa', pal:P.tita, quip:'Uy iho/iha, kumain ka na ba? Mukhang ang payayat mo na yata.' },
+      { x:1980, name:'Jun-jun', pal:P.kid, quip:'Kuya/Ate! Panoorin mo, marunong na akong mag-bike! ...Sya pala, wala pa akong bike.' }
+    ]
+  },
+  hood:{
+    props:[['store',480],['house',820],['hoop',1060],['jeepney',1330],['house',1680],['tree',1960],['bush',2140],['house',2440]],
+    npcs:[
+      { x:1090, name:'Kuya Raffy', pal:P.raffy, quest:true },
+      { x:540, name:'Aling Tindera', pal:P.nena, quip:'May bago kaming paninda! Chichirya, softdrinks, at load — complete na yan!' },
+      { x:1400, name:'Barkada ni Raffy', pal:P.stud, quip:'Tara, one game pa! Bawi ako sa susunod, promise yan.' }
+    ]
+  },
+  digital:{
+    props:[['tower',340,160],['tower',600,200],['lamp',760],['tower',920,140],['tower',1220,180],['lamp',1420],['tower',1780,220],['tower',2080,150],['lamp',2280],['bush',2480]],
+    npcs:[
+      { x:1260, name:'Kuya Streamer', pal:P.raffy, quest:true },
+      { x:700, name:'Wifi Kid', pal:P.kid, quip:'Ang bilis ng wifi dito, promise! Three bars lagi! ...Apat minsan.' }
+    ]
+  },
+  shrine:{
+    props:[['tree',380],['lantern',680],['gate',1000],['lantern',1320],['tree',1620],['bush',1860],['lantern',2120],['tree',2420]],
+    npcs:[
+      { x:1040, name:'Mang Ben', pal:P.ben, quest:true },
+      { x:1720, name:'Nagme-meditate', pal:P.stud, quip:'Peace of mind... peace of mind... Wag mo akong guluhin, naka-zone na ako.' }
+    ]
+  },
+  school:{
+    props:[['sign',430,'PAARALAN'],['school',720],['flag',1000],['tree',1280],['bush',1520],['tree',1920],['lamp',2220]],
+    npcs:[
+      { x:900, name:"Ma'am Santos", pal:P.maam, quest:true },
+      { x:1440, name:'Kaklase', pal:P.stud, quip:'Pahiram ng notes, please? Joke lang! ...Pero seryoso, pahiram mo na.' }
+    ]
+  },
+  workshop:{
+    props:[['shed',580],['barrel',900],['lamp',1060],['toolbox',1240],['shed',1580],['barrel',1900],['tree',2200]],
+    npcs:[
+      { x:700, name:'Trainer Marco', pal:P.marco, quest:true },
+      { x:1660, name:'Trainee', pal:P.stud, quip:'Kailan kaya ako makakakuha ng NC II? Sabi ni trainer, malapit na daw... dalawang taon na ang "malapit na".' }
+    ]
+  },
+  dawn:{
+    props:[['lantern',620],['gate',900],['lantern',1160],['tree',1460],['bush',1700],['tree',2000],['lantern',2260]],
+    npcs:[
+      { x:940, name:'Aling Nena', pal:P.nena, quest:true },
+      { x:1820, name:'Jogger', pal:P.tatay, quip:'Isang kilometro na lang! Kaya mo yan, self! Woo!' }
+    ]
+  },
+  deep:{
+    props:[['torch',380],['desks',640],['board',900],['torch',1120],['desks',1420],['torch',1680],['board',1940],['torch',2240]],
+    npcs:[
+      { x:960, name:"Ma'am Santos", pal:P.maam, quest:true },
+      { x:1740, name:'Guardian ng Dungeon', pal:P.proct, quip:'Ang susi sa susunod na antas... ay pag-aaral. Walang shortcut. Wala talaga.' }
+    ]
+  },
+  forge:{
+    props:[['shed',540],['anvil',860],['barrel',1020],['lamp',1220],['shed',1560],['anvil',1880],['barrel',2040],['tree',2340]],
+    npcs:[
+      { x:640, name:'Trainer Marco', pal:P.marco, quest:true },
+      { x:1640, name:'Welder', pal:P.tatay, quip:'Ingat sa sparks, ha! Safety first bago selfie.' }
+    ]
+  },
+  plaza:{
+    props:[['hall',680],['flag',960],['tree',1220],['bench',1420],['lamp',1620],['tree',1920],['bench',2120],['lamp',2320]],
+    npcs:[
+      { x:800, name:'Kap. Reyes', pal:P.kap, quest:true },
+      { x:1480, name:'Botante', pal:P.tita, quip:'Bumoto ka ha, pag eighteen ka na! Ang boto mo, mahalaga yan.' }
+    ]
+  },
+  exam:{
+    props:[['torch',460],['clocktower',820],['torch',1140],['desks',1420],['torch',1720],['bush',2040]],
+    npcs:[
+      { x:880, name:'Proctor', pal:P.proct, quest:true },
+      { x:1480, name:'Examinee', pal:P.stud, quip:'Kinakabahan ako... Ikaw din ba? Magdasal tayo. Sabay tayo.' }
+    ]
+  },
+  victory:{
+    props:[['tree',480],['tree',880],['arch',1400],['tree',1900],['tree',2300],['bush',2520]],
+    npcs:[
+      { x:1440, name:'Ang Victory Arch', pal:null, quest:true, arch:true },
+      { x:1020, name:'Proud na Nanay', pal:P.nanay, quip:'Yan na ang anak ko!! Umiiyak ako sa tuwa, anak. Halika, yakap!' }
+    ]
   }
-  c.globalAlpha = 1;
-  requestAnimationFrame(fxLoop);
+};
+
+/* ---------- prop drawing (all coords: screen x, feet/base y) ---------- */
+function px(x,y,w,h,c){ g.fillStyle=c; g.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
+
+const DRAW_PROP = {
+  house(x,y,t,i){
+    const wall = ['#c9a86a','#b89a72','#c9a06a'][i%3];
+    px(x-32,y-46,64,34,wall);            // body
+    px(x-32,y-46,64,3,'#00000022');      // shade line
+    px(x-38,y-58,76,14,'#7a4a30');       // roof
+    px(x-42,y-56,84,4,'#5a3a24');        // roof ridge
+    px(x-24,y-8,6,8,'#6a4a30');          // stilts
+    px(x+18,y-8,6,8,'#6a4a30');
+    px(x-8,y-30,14,18,'#5a3a24');        // door
+    const lit = hash(i*7)>0.4;
+    px(x+14,y-40,10,9, lit ? '#ffd98a' : '#3a3040');  // window
+    px(x-24,y-40,10,9, lit ? '#ffd98a' : '#3a3040');
+  },
+  store(x,y,t,i){
+    px(x-45,y-52,90,40,'#b08a5a');
+    px(x-45,y-52,90,4,'#8a6a42');
+    for(let s=0;s<9;s++) px(x-45+s*10,y-58,10,7, s%2?'#c94a4a':'#f0e0c0'); // awning
+    px(x-30,y-44,60,10,'#3a2c22');       // sign
+    for(let s=0;s<5;s++) px(x-26+s*12,y-41,4,4,'#ffd98a');
+    px(x-34,y-24,16,12,'#5a3a24');       // opening
+    px(x+8,y-24,26,12,'#5a3a24');
+    px(x-40,y-12,10,12,'#8a6a42');       // crate
+    px(x+30,y-14,12,14,'#8a6a42');
+  },
+  jeepney(x,y,t){
+    px(x-40,y-26,80,16,'#c8c8d0');       // body
+    px(x-40,y-22,80,4,'#d97a2a');        // stripe
+    px(x-40,y-26,80,3,'#9a9aa4');
+    px(x-30,y-21,10,7,'#3a4a6a');        // windows
+    px(x-16,y-21,10,7,'#3a4a6a');
+    px(x-2,y-21,10,7,'#3a4a6a');
+    px(x+26,y-24,14,12,'#b8b8c2');       // hood
+    px(x-44,y-24,6,10,'#d97a2a');        // front bumper
+    g.fillStyle='#2a2a30';
+    g.beginPath(); g.arc(x-24,y-8,6,0,7); g.fill();
+    g.beginPath(); g.arc(x+22,y-8,6,0,7); g.fill();
+    g.fillStyle='#55555e';
+    g.beginPath(); g.arc(x-24,y-8,2.5,0,7); g.fill();
+    g.beginPath(); g.arc(x+22,y-8,2.5,0,7); g.fill();
+    px(x-36,y-31,66,4,'#8a8a94');        // roof rack
+    px(x-10,y-35,2,4,'#8a8a94'); px(x+16,y-35,2,4,'#8a8a94');
+  },
+  tree(x,y,t,i){
+    const sway = Math.sin(t/900+i)*1.5;
+    g.strokeStyle='#6a4a30'; g.lineWidth=4;
+    g.beginPath(); g.moveTo(x,y); g.quadraticCurveTo(x+3,y-22,x+6+sway*0.4,y-40); g.stroke();
+    g.fillStyle='#4a8a4a';
+    for(let f=0;f<6;f++){
+      const a = -Math.PI + f*(Math.PI/5);
+      g.save(); g.translate(x+6+sway*0.4,y-42);
+      g.rotate(a*0.5+sway*0.02);
+      g.fillRect(-16,-2,32,3);
+      g.restore();
+    }
+    px(x+2+sway*0.4|0,y-46,8,6,'#3a7a3a');
+  },
+  bush(x,y,t,i){
+    const s = 0.8+hash(i)*0.5;
+    g.fillStyle='#3f7a44';
+    g.beginPath(); g.arc(x-8*s,y-6*s,8*s,0,7); g.fill();
+    g.beginPath(); g.arc(x+2*s,y-9*s,9*s,0,7); g.fill();
+    g.beginPath(); g.arc(x+11*s,y-5*s,7*s,0,7); g.fill();
+    g.fillStyle='#4f9a54';
+    g.beginPath(); g.arc(x+1*s,y-11*s,5*s,0,7); g.fill();
+  },
+  tower(x,y,t,hgt){
+    px(x-30,y-hgt,60,hgt,'#10142a');
+    px(x-30,y-hgt,60,3,'#1c2140');
+    for(let wy=y-hgt+10; wy<y-14; wy+=14){
+      for(let wx=x-22; wx<x+16; wx+=12){
+        const lit = hash(wx*3.7+wy*1.3) > 0.45;
+        const blink = lit && hash(wx+wy) > 0.85 && Math.sin(t/300+wx)>0;
+        px(wx,wy,6,7, blink ? '#bffef4' : (lit?'#59e0d0':'#181c34'));
+      }
+    }
+    px(x-2,y-hgt-16,3,16,'#1c2140');
+    if(Math.sin(t/400)>0) px(x-2,y-hgt-20,3,4,'#ff6a8a');
+  },
+  lamp(x,y,t){
+    const p = PAL[G.lvl.theme];
+    px(x-1,y-52,3,52,'#2a2a34');
+    px(x-4,y-56,9,5,'#2a2a34');
+    const fl = 0.8+Math.sin(t/500)*0.2;
+    g.fillStyle = p.neon || '#ffd98a';
+    g.globalAlpha = 0.9*fl;
+    g.beginPath(); g.arc(x,y-52,4,0,7); g.fill();
+    g.globalAlpha = 0.18*fl;
+    g.beginPath(); g.arc(x,y-52,14,0,7); g.fill();
+    g.globalAlpha = 1;
+  },
+  gate(x,y,t){
+    const c = G.lvl.theme==='dawn' ? '#8a4a58' : '#3f6a5f';
+    px(x-42,y-64,10,64,c); px(x+32,y-64,10,64,c);
+    px(x-52,y-66,104,8,c);
+    px(x-44,y-50,88,6,c);
+    px(x-52,y-70,10,4,'#2a2018'); px(x+42,y-70,10,4,'#2a2018');
+  },
+  lantern(x,y,t){
+    px(x-4,y-30,8,30,'#6a6a72');
+    px(x-8,y-36,16,8,'#8a8a92');
+    const fl = 0.75+Math.sin(t/450+x)*0.25;
+    g.globalAlpha=fl; px(x-4,y-33,8,5,'#ffe9a0'); g.globalAlpha=1;
+    px(x-9,y-29,18,3,'#5a5a62');
+  },
+  sign(x,y,t,label){
+    px(x-2,y-34,4,34,'#6a4a30');
+    px(x-22,y-44,44,14,'#8a6a42');
+    px(x-20,y-42,40,10,'#a8865a');
+    // etched text suggestion: little dashes
+    for(let s=0;s<4;s++) px(x-16+s*9,y-39,6,2,'#5a4028');
+  },
+  school(x,y,t){
+    px(x-90,y-80,180,68,'#8a7a68');
+    px(x-90,y-80,180,4,'#6a5c4c');
+    g.fillStyle='#6a5c4c';
+    g.beginPath(); g.moveTo(x-100,y-80); g.lineTo(x,y-108); g.lineTo(x+100,y-80); g.closePath(); g.fill();
+    px(x-10,y-40,20,40,'#4a3a2c');       // door
+    for(let wy=0;wy<2;wy++) for(let wx=0;wx<4;wx++){
+      px(x-74+wx*38,y-70+wy*24,16,14, (wx+wy)%2 ? '#ffd98a':'#3a3040');
+    }
+    px(x+52,y-70,16,14,'#ffd98a');
+  },
+  flag(x,y,t){
+    px(x-1,y-90,3,90,'#8a8a92');
+    px(x-6,y-92,12,4,'#6a6a72');
+    for(let s=0;s<12;s++){
+      const wob = Math.sin(t/300+s*0.7)*1.5;
+      px(x+2+s*3,y-88+wob+(s>5?4:0),3,4, s<6 ? '#2a4a9a' : '#c93a3a');
+    }
+  },
+  hoop(x,y,t){
+    px(x-2,y-64,4,64,'#8a8a92');
+    px(x-14,y-78,28,18,'#e8e8e8');
+    px(x-4,y-72,8,6,'#c94a4a');
+    px(x+2,y-60,14,2,'#c94a4a');         // ring
+    g.strokeStyle='#c94a4a'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(x+2,y-58); g.lineTo(x+2,y-52); g.lineTo(x+14,y-52); g.lineTo(x+14,y-58); g.stroke();
+  },
+  shed(x,y,t){
+    px(x-60,y-52,120,40,'#4a3826');
+    g.fillStyle='#3a2c1e';
+    g.beginPath(); g.moveTo(x-68,y-52); g.lineTo(x,y-76); g.lineTo(x+68,y-52); g.closePath(); g.fill();
+    px(x-60,y-52,120,3,'#2a2014');
+    px(x-24,y-30,48,30,'#1a140c');       // open front
+    const fl = 0.7+Math.sin(t/350)*0.3;
+    g.globalAlpha=fl; px(x-4,y-48,4,4,'#ffd98a'); g.globalAlpha=0.15*fl;
+    g.beginPath(); g.arc(x-2,y-46,12,0,7); g.fill(); g.globalAlpha=1;
+    px(x-2,y-52,1,4,'#2a2014');
+    // gear decoration
+    g.strokeStyle='#6a5638'; g.lineWidth=4;
+    g.beginPath(); g.arc(x+38,y-20,10,0,7); g.stroke();
+  },
+  barrel(x,y,t){
+    px(x-8,y-18,16,18,'#7a5a3a');
+    px(x-8,y-14,16,2,'#5a4028');
+    px(x-8,y-7,16,2,'#5a4028');
+    px(x-8,y-18,16,3,'#8a6a48');
+  },
+  toolbox(x,y,t){
+    px(x-10,y-8,20,8,'#c94a2a');
+    px(x-3,y-11,6,3,'#8a3a1e');
+    px(x-10,y-8,20,2,'#e06a4a');
+  },
+  anvil(x,y,t){
+    px(x-12,y-10,24,6,'#3a3a44');
+    px(x-6,y-16,12,6,'#4a4a56');
+    px(x-16,y-16,10,4,'#4a4a56');
+    px(x-4,y-4,8,4,'#2a2a34');
+    if(Math.sin(t/200+x)>0.7){ g.globalAlpha=.8; px(x+8,y-20,2,2,'#ffc060'); g.globalAlpha=1; }
+  },
+  desks(x,y,t){
+    for(let d=0;d<3;d++){
+      const dx = x+d*34;
+      px(dx-10,y-14,20,3,'#8a6a42');
+      px(dx-8,y-11,3,11,'#6a4a30');
+      px(dx+5,y-11,3,11,'#6a4a30');
+      px(dx-12,y-6,24,2,'#7a5a38');
+    }
+  },
+  board(x,y,t){
+    px(x-26,y-44,52,30,'#2a4a38');
+    px(x-28,y-46,56,3,'#6a4a30');
+    px(x-26,y-14,52,3,'#6a4a30');
+    g.strokeStyle='#e8e8e0'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(x-18,y-36); g.lineTo(x+2,y-36); g.moveTo(x-18,y-30); g.lineTo(x+8,y-30); g.moveTo(x-18,y-24); g.lineTo(x-2,y-24); g.stroke();
+    px(x-30,y-44,3,44,'#6a4a30'); px(x+27,y-44,3,44,'#6a4a30');
+  },
+  torch(x,y,t){
+    const blue = G.lvl.theme==='exam';
+    px(x-2,y-40,4,40,'#4a3a2a');
+    const fl = Math.sin(t/120+x)*1.5;
+    g.fillStyle = blue ? '#8fb0ff' : '#ffb040';
+    g.beginPath();
+    g.moveTo(x-4,y-40); g.quadraticCurveTo(x-3+fl,y-50,x,y-53+fl);
+    g.quadraticCurveTo(x+3+fl,y-50,x+4,y-40); g.closePath(); g.fill();
+    g.fillStyle = blue ? '#d0e0ff' : '#ffe080';
+    g.beginPath(); g.arc(x,y-43,2.5,0,7); g.fill();
+    g.globalAlpha=.12; g.beginPath(); g.arc(x,y-44,12,0,7); g.fill(); g.globalAlpha=1;
+  },
+  hall(x,y,t){
+    px(x-80,y-64,160,52,'#c9b088');
+    px(x-80,y-64,160,4,'#a08a62');
+    g.fillStyle='#a08a62';
+    g.beginPath(); g.moveTo(x-90,y-64); g.lineTo(x,y-88); g.lineTo(x+90,y-64); g.closePath(); g.fill();
+    px(x-12,y-36,24,36,'#5a4a34');
+    px(x-60,y-52,20,14,'#3a3040'); px(x+40,y-52,20,14,'#3a3040');
+    px(x-24,y-58,48,10,'#3a5a8a');       // sign board
+    for(let s=0;s<4;s++) px(x-18+s*10,y-55,6,3,'#ffe9c9');
+  },
+  bench(x,y,t){
+    px(x-16,y-10,32,3,'#8a6a42');
+    px(x-16,y-16,32,3,'#8a6a42');
+    px(x-13,y-7,3,7,'#6a4a30'); px(x+10,y-7,3,7,'#6a4a30');
+  },
+  clocktower(x,y,t){
+    px(x-32,y-170,64,170,'#2a2e48');
+    px(x-32,y-170,64,4,'#3a3e5c');
+    g.fillStyle='#3a3e5c';
+    g.beginPath(); g.moveTo(x-40,y-170); g.lineTo(x,y-196); g.lineTo(x+40,y-170); g.closePath(); g.fill();
+    g.fillStyle='#12142a';
+    g.beginPath(); g.arc(x,y-140,20,0,7); g.fill();
+    g.strokeStyle='#e0a0a0'; g.lineWidth=2;
+    g.beginPath(); g.arc(x,y-140,20,0,7); g.stroke();
+    const ha = t/6000, ma = t/1000;
+    g.beginPath(); g.moveTo(x,y-140); g.lineTo(x+Math.sin(ha)*9,y-140-Math.cos(ha)*9); g.stroke();
+    g.lineWidth=1;
+    g.beginPath(); g.moveTo(x,y-140); g.lineTo(x+Math.sin(ma)*14,y-140-Math.cos(ma)*14); g.stroke();
+    px(x-8,y-100,16,26,'#12142a');
+    px(x-8,y-100,16,3,'#3a3e5c');
+  },
+  arch(x,y,t){
+    const gl = 0.85+Math.sin(t/600)*0.15;
+    px(x-56,y-120,16,120,'#b8863a');
+    px(x+40,y-120,16,120,'#b8863a');
+    px(x-66,y-128,132,14,'#d9a84a');
+    px(x-58,y-108,116,8,'#d9a84a');
+    g.globalAlpha=gl; px(x-4,y-136,8,8,'#fff0b8'); g.globalAlpha=1;
+    g.globalAlpha=.1*gl; g.fillStyle='#ffe9a0'; g.beginPath(); g.arc(x,y-70,60,0,7); g.fill(); g.globalAlpha=1;
+    px(x-70,y-4,140,4,'#8a6a30');
+  }
+};
+
+/* ---------- people ---------- */
+function drawPerson(sx, fy, face, phase, moving, pal, opts={}){
+  const t = G.t;
+  const sc = pal.small ? 0.72 : 1;
+  const bob = moving ? Math.abs(Math.sin(phase))*1.2 : Math.sin(t/600+sx*0.1)*0.6;
+  const legSwing = moving ? Math.sin(phase)*3 : 0;
+  const armSwing = moving ? Math.sin(phase+Math.PI)*2.5 : Math.sin(t/600+sx*0.1)*0.5;
+
+  // shadow
+  g.fillStyle='rgba(0,0,0,.22)';
+  g.beginPath(); g.ellipse(sx,fy,7*sc,2*sc,0,0,7); g.fill();
+
+  g.save();
+  g.translate(sx,fy);
+  g.scale(face*sc, sc);
+
+  // legs (hidden partly by dress)
+  g.fillStyle=pal.bottom;
+  if(pal.dress){
+    g.fillRect(-6,-9,12,9);
+    g.fillRect(-7,-3,14,3);
+  } else {
+    g.fillRect(-4+legSwing,-8,3,8);
+    g.fillRect(1-legSwing,-8,3,8);
+  }
+  // skirt
+  if(pal.skirt){ g.fillStyle=pal.bottom; g.fillRect(-6,-12,12,5); }
+  // torso
+  g.fillStyle=pal.top;
+  g.fillRect(-5,-18-bob,10,10);
+  // arms
+  g.fillStyle=pal.top;
+  g.fillRect(-7-armSwing*0.4,-17-bob,2.5,8);
+  g.fillRect(4.5-armSwing*0.4,-17-bob,2.5,8);
+  g.fillStyle=pal.skin;
+  g.fillRect(-7-armSwing*0.4,-10-bob,2.5,2);
+  g.fillRect(4.5-armSwing*0.4,-10-bob,2.5,2);
+  // bag (Aiel lang)
+  if(pal.bag){ g.fillStyle=pal.bag; g.fillRect(-8,-16-bob,3,7); }
+  // head
+  g.fillStyle=pal.skin;
+  g.fillRect(-4,-26-bob,8,8);
+  // hair
+  g.fillStyle=pal.hair;
+  g.fillRect(-4,-27-bob,8,3);
+  g.fillRect(-5,-26-bob,2,4);
+  if(pal.long) g.fillRect(-5,-24-bob,2,7);
+  // eye
+  g.fillStyle='#1a1210';
+  g.fillRect(1,-23-bob,1.5,1.5);
+  g.restore();
+
+  // quest marker
+  if(opts.quest && !S.done.includes(G.lvl.n)){
+    const my = fy - 34*sc + Math.sin(t/300)*2;
+    g.fillStyle='#ffd23a';
+    g.fillRect(sx-1,my-6,3,5);
+    g.fillRect(sx-1,my,3,2);
+  }
+}
+
+/* ---------- background pieces ---------- */
+function hillPath(color, par, amp, seed, base){
+  const off = G.camX*par;
+  g.fillStyle=color;
+  g.beginPath();
+  g.moveTo(0,VH);
+  for(let sx=0; sx<=VW+4; sx+=4){
+    const wx = sx+off;
+    const yy = base + Math.sin(wx*0.008+seed)*amp + Math.sin(wx*0.027+seed*1.7)*amp*0.4;
+    g.lineTo(sx,yy);
+  }
+  g.lineTo(VW,VH);
+  g.closePath(); g.fill();
+}
+
+function drawSky(){
+  const p = PAL[G.lvl.theme];
+  const grad = g.createLinearGradient(0,0,0,VH);
+  grad.addColorStop(0,p.top); grad.addColorStop(1,p.bot);
+  g.fillStyle=grad; g.fillRect(0,0,VW,VH);
+
+  if(p.night){
+    g.fillStyle='#ffffff';
+    for(const st of G.stars){
+      g.globalAlpha = 0.3+0.5*Math.abs(Math.sin(G.t/1000+st.tw));
+      g.fillRect(st.x,st.y,st.s,st.s);
+    }
+    g.globalAlpha=1;
+  }
+  // sun / moon
+  const cx = VW*0.76 - (G.camX*0.04)%40, cy = VH*0.2;
+  g.globalAlpha=.25; g.fillStyle=p.cel;
+  g.beginPath(); g.arc(cx,cy,26,0,7); g.fill();
+  g.globalAlpha=1;
+  g.beginPath(); g.arc(cx,cy,15,0,7); g.fill();
+  if(p.night){ // moon crater bite
+    g.fillStyle=p.top;
+    g.beginPath(); g.arc(cx+6,cy-4,12,0,7); g.fill();
+  }
+  // clouds
+  g.fillStyle = p.night ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.35)';
+  for(const c of G.clouds){
+    const span = VW+240;
+    let sx = ((c.x - G.camX*0.1) % span + span) % span - 120;
+    g.beginPath();
+    g.arc(sx,c.y,10*c.s,0,7); g.arc(sx+12*c.s,c.y-4*c.s,13*c.s,0,7); g.arc(sx+26*c.s,c.y,9*c.s,0,7);
+    g.fill();
+  }
+}
+
+function drawGround(){
+  const p = PAL[G.lvl.theme];
+  const gy = VH-36;
+  g.fillStyle=p.ground; g.fillRect(0,gy,VW,36);
+  g.fillStyle='rgba(0,0,0,.18)'; g.fillRect(0,gy,VW,2);
+  // speckles
+  const off = G.camX;
+  g.fillStyle='rgba(0,0,0,.15)';
+  for(let sx=0;sx<VW;sx+=14){
+    const wx = sx+off;
+    if(hash(Math.floor(wx/14))>0.72) g.fillRect(sx, gy+6+hash(wx)*24, 3, 2);
+  }
+  // grass tufts
+  g.fillStyle='rgba(255,255,255,.08)';
+  for(let sx=0;sx<VW;sx+=22){
+    const wx = sx+off;
+    if(hash(Math.floor(wx/22)+9)>0.6) g.fillRect(sx, gy-2, 2, 3);
+  }
+}
+
+function drawMotes(){
+  const p = PAL[G.lvl.theme];
+  g.fillStyle=p.fx;
+  for(const m of G.motes){
+    g.globalAlpha = m.a*(0.6+0.4*Math.sin(G.t/800+m.ph));
+    g.fillRect(m.x, m.y, m.r, m.r);
+  }
+  g.globalAlpha=1;
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  const pl = G.player;
+  let dir = 0;
+  if(!isLocked()){
+    if(keys.ArrowLeft||keys.KeyA) dir -= 1;
+    if(keys.ArrowRight||keys.KeyD) dir += 1;
+  }
+  pl.vx = dir*95;
+  pl.x += pl.vx*dt;
+  pl.x = Math.max(24, Math.min(G.worldW-24, pl.x));
+  pl.moving = dir!==0;
+  if(dir!==0) pl.face = dir;
+  if(pl.moving) pl.phase += dt*11;
+
+  // camera
+  const target = Math.max(0, Math.min(G.worldW-VW, pl.x - VW/2));
+  G.camX += (target-G.camX)*Math.min(1, dt*5);
+
+  // motes drift
+  for(const m of G.motes){
+    m.y -= m.v*dt*10;
+    m.x += Math.sin(G.t/1400+m.ph)*dt*6;
+    if(m.y<-4){ m.y=VH+4; m.x=Math.random()*VW; }
+  }
+  // clouds drift
+  for(const c of G.clouds) c.x += dt*3;
+
+  updatePrompt();
+}
+
+/* ---------- interaction ---------- */
+let nearNPC = null;
+function updatePrompt(){
+  const pr = $('#prompt');
+  nearNPC = null;
+  if(isLocked()){ pr.style.display='none'; return; }
+  let best=null, bd=34;
+  for(const n of G.npcs){
+    const d = Math.abs(n.x - G.player.x);
+    if(d<bd){ bd=d; best=n; }
+  }
+  nearNPC = best;
+  if(best){
+    const sx = (best.x - G.camX)*SCALE;
+    pr.style.display='block';
+    pr.style.left = Math.min(innerWidth-160, Math.max(160, sx))+'px';
+    pr.style.top = (VH-36-40*SCALE)+'px';
+    pr.innerHTML = '<b>[E]</b> Makipag-usap kay '+best.name;
+  } else pr.style.display='none';
+}
+
+function tryInteract(){
+  if(!nearNPC) return;
+  if(nearNPC.quest){ startQuest(); }
+  else if(nearNPC.quip){ playDialogue([{sp:nearNPC.name, t:nearNPC.quip}]); }
+}
+
+/* ---------- draw ---------- */
+function draw(){
+  const p = PAL[G.lvl.theme];
+  drawSky();
+  hillPath(p.far, 0.15, 20, 1.3, VH-36-58);
+  hillPath(p.mid, 0.4, 13, 4.2, VH-36-26);
+  drawGround();
+
+  // props
+  G.props.forEach((pr,i)=>{
+    const sx = pr.x - G.camX;
+    if(sx < -140 || sx > VW+140) return;
+    DRAW_PROP[pr.type](sx, VH-36, G.t, i, pr.opt);
+  });
+
+  // npcs
+  for(const n of G.npcs){
+    const sx = n.x - G.camX;
+    if(sx < -60 || sx > VW+60) continue;
+    if(n.arch){
+      // arch trigger has no body; skip person
+      continue;
+    }
+    drawPerson(sx, VH-36, (G.player.x>n.x)?1:-1, 0, false, n.pal, {quest:n.quest});
+  }
+
+  // player
+  const pl = G.player;
+  drawPerson(pl.x - G.camX, VH-36, pl.face, pl.phase, pl.moving, P.aiel);
+
+  drawMotes();
+}
+
+/* ---------- main loop ---------- */
+function loop(ts){
+  if(!G.running) return;
+  if(!G.last) G.last = ts;
+  const dt = Math.min(0.05,(ts-G.last)/1000);
+  G.last = ts; G.t = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- scene setup ---------- */
+function setupScene(lvl){
+  G.lvl = lvl;
+  G.scene = SCENES[lvl.theme];
+  G.props = G.scene.props.map(pr=>({ type:pr[0], x:pr[1], opt:pr[2] }));
+  G.npcs = G.scene.npcs.map(n=>({...n}));
+  G.worldW = Math.max(2400, G.scene.props.reduce((m,pr)=>Math.max(m,pr[1]),0)+420);
+  G.player.x = 110; G.player.vx=0; G.player.face=1; G.player.phase=0;
+  G.camX = 0;
+  G.stars = [];
+  if(PAL[lvl.theme].night){
+    for(let i=0;i<55;i++) G.stars.push({ x:Math.random()*VW, y:Math.random()*(VH*0.55), s:Math.random()<0.2?2:1, tw:Math.random()*6 });
+  }
+  G.clouds = [];
+  for(let i=0;i<5;i++) G.clouds.push({ x:Math.random()*3000, y:20+Math.random()*60, s:0.7+Math.random()*0.9 });
+  G.motes = [];
+  for(let i=0;i<26;i++) G.motes.push({ x:Math.random()*VW, y:Math.random()*VH, v:.3+Math.random()*.7, r:Math.random()<.3?2:1, a:.15+Math.random()*.35, ph:Math.random()*6 });
+}
+
+function startLoop(){
+  G.running = true; G.last = 0;
+  requestAnimationFrame(loop);
+}
+function stopLoop(){ G.running = false; }
+
+let toastTimer = null;
+function showToast(txt){
+  const el = $('#toast');
+  el.textContent = txt;
+  el.style.display='block'; el.style.opacity='1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.style.display='none',450); }, 3600);
 }
 
 /* =========================================================
@@ -1085,65 +1584,60 @@ document.addEventListener('keydown', e => {
 /* =========================================================
    ACTIVITIES
    ========================================================= */
-const Act = { qs:[], qi:0, timer:null, timeLeft:0, onDone:null };
+const Act = { qs:[], qi:0, timer:null, a:null, onDone:null };
 
-function startActivity(lvl, done){
-  Act.onDone = done;
+function startActivity(a, done){
+  Act.onDone = done; Act.a = a;
   $('#activity').classList.add('active');
   $('#act-feedback').textContent = '';
   $('#act-next-row').classList.remove('show');
-  const a = lvl.act;
   $('#act-title').textContent = a.title;
   if(a.type === 'quiz'){ Act.qs = a.qs; Act.qi = 0; renderQuestion(a); }
   else if(a.type === 'match') renderMatch(a);
   else if(a.type === 'order') renderOrder(a);
 }
-
 function finishActivity(){
   $('#activity').classList.remove('active');
+  clearInterval(Act.timer);
   const cb = Act.onDone; Act.onDone = null;
   if(cb) cb();
 }
 
-/* --- quiz --- */
 function renderQuestion(a){
   clearInterval(Act.timer);
   const q = Act.qs[Act.qi];
-  $('#act-count').textContent = `Tanong ${Act.qi+1} ng ${Act.qs.length}`;
+  $('#act-count').textContent = 'Tanong '+(Act.qi+1)+' ng '+Act.qs.length;
   $('#act-feedback').textContent = '';
   $('#act-next-row').classList.remove('show');
 
   const wrap = $('#timer-wrap');
-  if(a.timer){
-    wrap.style.display = 'block';
-    startTimer(a.timer);
-  } else wrap.style.display = 'none';
+  if(a.timer){ wrap.style.display='block'; startTimer(a.timer); }
+  else wrap.style.display='none';
 
   const body = $('#act-body');
-  body.innerHTML = `<div class="act-q">${q.q}</div><div class="choices"></div>`;
+  body.innerHTML = '<div class="act-q">'+q.q+'</div><div class="choices"></div>';
   const ch = body.querySelector('.choices');
-  const isFactFake = a.style === 'factfake';
+  const isFF = a.style === 'factfake';
   q.c.forEach((txt, idx) => {
     const b = document.createElement('button');
     b.className = 'choice';
-    b.textContent = (isFactFake ? '' : String.fromCharCode(65+idx) + '. ') + txt;
-    b.onclick = () => answer(idx, b, a);
+    b.textContent = (isFF ? '' : String.fromCharCode(65+idx)+'. ') + txt;
+    b.onclick = () => answer(idx, b);
     ch.appendChild(b);
   });
 }
 function startTimer(sec){
-  Act.timeLeft = sec;
   const bar = $('#timer-bar');
-  bar.style.width = '100%'; bar.classList.remove('low');
+  bar.style.width='100%'; bar.classList.remove('low');
   const t0 = Date.now();
   Act.timer = setInterval(() => {
-    const frac = 1 - (Date.now()-t0)/(sec*1000);
-    bar.style.width = Math.max(0, frac*100) + '%';
-    if(frac < .3) bar.classList.add('low');
-    if(frac <= 0){ clearInterval(Act.timer); answer(-1, null, LEVELS[10].act); }
+    const frac = 1-(Date.now()-t0)/(sec*1000);
+    bar.style.width = Math.max(0,frac*100)+'%';
+    if(frac<.3) bar.classList.add('low');
+    if(frac<=0){ clearInterval(Act.timer); answer(-1,null); }
   }, 50);
 }
-function answer(idx, btn, a){
+function answer(idx, btn){
   clearInterval(Act.timer);
   const q = Act.qs[Act.qi];
   const buttons = document.querySelectorAll('#act-body .choice');
@@ -1151,61 +1645,58 @@ function answer(idx, btn, a){
   const fb = $('#act-feedback');
   if(idx === q.a){
     if(btn) btn.classList.add('correct');
-    fb.textContent = 'Tama! ' + q.why;
+    fb.textContent = 'Tama! '+q.why;
   } else {
     if(btn) btn.classList.add('wrong');
     buttons[q.a].classList.add('correct');
-    fb.textContent = (idx === -1 ? 'Ubos na ang oras! ' : 'Hindi yan... ') + q.why;
+    fb.textContent = (idx===-1 ? 'Ubos na ang oras! ' : 'Hindi yan... ')+q.why;
   }
-  $('#act-next-btn').textContent = (Act.qi+1 >= Act.qs.length) ? 'Tapos na' : 'Sunod na tanong';
+  $('#act-next-btn').textContent = (Act.qi+1>=Act.qs.length) ? 'Tapos na' : 'Sunod na tanong';
   $('#act-next-row').classList.add('show');
 }
 $('#act-next-btn').addEventListener('click', () => {
   Act.qi++;
   if(Act.qi >= Act.qs.length) finishActivity();
-  else renderQuestion(LEVELS[currentLevel].act);
+  else renderQuestion(Act.a);
 });
 
 /* --- matching --- */
 let matchSel = null, matchLeft = 0;
 function renderMatch(a){
-  $('#act-count').textContent = `Itugma ang mga pares - ${a.pairs.length} pares`;
+  $('#act-count').textContent = 'Itugma ang mga pares - '+a.pairs.length+' pares';
   matchSel = null; matchLeft = a.pairs.length;
   const body = $('#act-body');
-  body.innerHTML = `<div class="match-grid">
-    <div class="match-col" id="mcol-l"></div>
-    <div class="match-col" id="mcol-r"></div></div>`;
+  body.innerHTML = '<div class="match-grid"><div class="match-col" id="mcol-l"></div><div class="match-col" id="mcol-r"></div></div>';
   const L = $('#mcol-l'), R = $('#mcol-r');
   const rights = a.pairs.map((p,i)=>({txt:p.r, i}));
-  // shuffle right column
   for(let i=rights.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rights[i],rights[j]]=[rights[j],rights[i]]; }
   a.pairs.forEach((p,i)=>{
     const bl = document.createElement('button');
     bl.className='match-item'; bl.textContent=p.l; bl.dataset.i=i;
-    bl.onclick=()=>pickLeft(bl,a);
+    bl.onclick=()=>pickLeft(bl);
     L.appendChild(bl);
   });
   rights.forEach(r=>{
     const br = document.createElement('button');
     br.className='match-item'; br.textContent=r.txt; br.dataset.i=r.i;
-    br.onclick=()=>pickRight(br,a);
+    br.onclick=()=>pickRight(br);
     R.appendChild(br);
   });
 }
-function pickLeft(btn,a){
+function pickLeft(btn){
   if(btn.classList.contains('paired')) return;
   document.querySelectorAll('#mcol-l .match-item').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel'); matchSel = btn;
 }
-function pickRight(btn,a){
+function pickRight(btn){
   if(!matchSel || btn.classList.contains('paired')) return;
   if(btn.dataset.i === matchSel.dataset.i){
     btn.classList.add('paired'); matchSel.classList.add('paired');
     matchSel.classList.remove('sel'); matchSel=null;
     matchLeft--;
-    $('#act-feedback').textContent = `Maganda! ${matchLeft} na lang.`;
+    $('#act-feedback').textContent = 'Maganda! '+matchLeft+' na lang.';
     if(matchLeft===0){
-      $('#act-feedback').textContent = 'Napakalusog ng isip mo! Complete!';
+      $('#act-feedback').textContent = 'Napakatalas ng isip mo! Complete!';
       setTimeout(finishActivity, 900);
     }
   } else {
@@ -1258,25 +1749,23 @@ function renderMap(){
   wrap.querySelectorAll('.node').forEach(n=>n.remove());
   const svg = $('#map-path');
   const pts = NODE_POS.map(p=>p.join(',')).join(' ');
-  svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="rgba(255,235,200,.35)" stroke-width=".7" stroke-dasharray="2 2" stroke-linecap="round"/>`;
-
+  svg.innerHTML = '<polyline points="'+pts+'" fill="none" stroke="rgba(255,235,200,.35)" stroke-width=".7" stroke-dasharray="2 2" stroke-linecap="round"/>';
   LEVELS.forEach((lvl,i)=>{
     const st = S.done.includes(lvl.n) ? 'done' : (lvl.n <= S.unlocked ? 'avail' : 'locked');
     const b = document.createElement('button');
-    b.className = 'node ' + st;
+    b.className = 'node '+st;
     b.style.left = NODE_POS[i][0]+'%';
     b.style.top = NODE_POS[i][1]+'%';
-    b.innerHTML = `<span class="node-dot">${st==='done' ? '&#10003;' : (st==='locked' ? '&#128274;' : lvl.n)}</span>
-      <span class="node-label">${lvl.short}</span>`;
+    b.innerHTML = '<span class="node-dot">'+(st==='done' ? '&#10003;' : (st==='locked' ? '&#128274;' : lvl.n))+'</span>'+
+      '<span class="node-label">'+lvl.short+'</span>';
     if(st!=='locked') b.onclick = ()=>enterLevel(i);
     wrap.appendChild(b);
   });
-
   $('#map-stats').innerHTML =
-    `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
-    `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
-    `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
-    S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+    '<span class="stat-chip">Kaalamán <b>'+S.knowledge+'</b></span>'+
+    '<span class="stat-chip">Kasanayan <b>'+S.skills+'</b></span>'+
+    '<span class="stat-chip">Pagpapahalaga <b>'+S.values+'</b></span>'+
+    S.passives.map(p=>'<span class="stat-chip passive-chip">&#9733; '+p+'</span>').join('');
 }
 
 /* =========================================================
@@ -1288,22 +1777,29 @@ function enterLevel(i){
   const lvl = LEVELS[i];
   fade(()=>{
     show('#screen-level');
-    setScene(lvl);
+    resizeGame();
+    setupScene(lvl);
     updateHUD();
-    playDialogue(lvl.intro, ()=>{
-      if(lvl.act) startActivity(lvl, ()=>playDialogue(lvl.outro, ()=>showReward(lvl)));
-      else showReward(lvl);
-    });
+    startLoop();
+    showToast(lvl.obj);
+  });
+}
+function startQuest(){
+  const lvl = G.lvl;
+  playDialogue(lvl.intro, ()=>{
+    if(lvl.act) startActivity(lvl.act, ()=>playDialogue(lvl.outro, ()=>showReward(lvl)));
+    else showReward(lvl);
   });
 }
 function updateHUD(){
   $('#hud').innerHTML =
-    `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
-    `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
-    `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
-    S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+    '<span class="stat-chip">Kaalamán <b>'+S.knowledge+'</b></span>'+
+    '<span class="stat-chip">Kasanayan <b>'+S.skills+'</b></span>'+
+    '<span class="stat-chip">Pagpapahalaga <b>'+S.values+'</b></span>'+
+    S.passives.map(p=>'<span class="stat-chip passive-chip">&#9733; '+p+'</span>').join('');
 }
 function showReward(lvl){
+  stopLoop();
   if(!S.done.includes(lvl.n)){
     S.done.push(lvl.n);
     if(S.unlocked < lvl.n+1 && lvl.n < 12) S.unlocked = lvl.n+1;
@@ -1313,20 +1809,29 @@ function showReward(lvl){
     if(lvl.gain.passive && !S.passives.includes(lvl.gain.passive)) S.passives.push(lvl.gain.passive);
     saveState();
   }
-  let gainsHtml = '';
-  if(lvl.gain.knowledge) gainsHtml += `<div class="gain-line">+${lvl.gain.knowledge} <b>Kaalamán</b></div>`;
-  if(lvl.gain.skills) gainsHtml += `<div class="gain-line">+${lvl.gain.skills} <b>Kasanayan</b></div>`;
-  if(lvl.gain.values) gainsHtml += `<div class="gain-line">+${lvl.gain.values} <b>Pagpapahalaga</b></div>`;
-  if(lvl.gain.passive) gainsHtml += `<div class="passive-badge">&#9733; Unlocked: ${lvl.gain.passive}</div>`;
-  $('#reward-title').textContent = `Natapos mo ang Antas ${lvl.n}: ${lvl.name}`;
-  $('#reward-gains').innerHTML = gainsHtml || '<div class="gain-line">Ang huling hakbay...</div>';
-  $('#reward-btn').textContent = (lvl.n === 12) ? 'Harapin ang Wakas' : 'Balik sa Mapa';
+  let gh = '';
+  if(lvl.gain.knowledge) gh += '<div class="gain-line">+'+lvl.gain.knowledge+' <b>Kaalamán</b></div>';
+  if(lvl.gain.skills) gh += '<div class="gain-line">+'+lvl.gain.skills+' <b>Kasanayan</b></div>';
+  if(lvl.gain.values) gh += '<div class="gain-line">+'+lvl.gain.values+' <b>Pagpapahalaga</b></div>';
+  if(lvl.gain.passive) gh += '<div class="passive-badge">&#9733; Unlocked: '+lvl.gain.passive+'</div>';
+  $('#reward-title').textContent = 'Natapos mo ang Antas '+lvl.n+': '+lvl.name;
+  $('#reward-gains').innerHTML = gh || '<div class="gain-line">Ang huling hakbang...</div>';
+  $('#reward-btn').textContent = (lvl.n===12) ? 'Harapin ang Wakas' : 'Balik sa Mapa';
   $('#reward-overlay').classList.add('active');
 }
 $('#reward-btn').addEventListener('click', ()=>{
   $('#reward-overlay').classList.remove('active');
   const lvl = LEVELS[currentLevel];
-  if(lvl.n === 12){ showEnding(); return; }
+  if(lvl.n===12){ showEnding(); return; }
+  fade(()=>{ show('#screen-map'); renderMap(); });
+});
+$('#quit-btn').addEventListener('click', ()=>{
+  stopLoop();
+  clearInterval(Act.timer);
+  $('#activity').classList.remove('active');
+  $('#dialogue').style.display='none';
+  $('#prompt').style.display='none';
+  dlgDone = null; dlgQueue = [];
   fade(()=>{ show('#screen-map'); renderMap(); });
 });
 
@@ -1336,17 +1841,17 @@ $('#reward-btn').addEventListener('click', ()=>{
 function showEnding(){
   fade(()=>{
     show('#screen-end');
-    $('#end-career').textContent = `Ang iyong pangarap: ${S.career || 'Pinapangarap na Propesyonal'}`;
+    $('#end-career').textContent = 'Ang iyong pangarap: '+(S.career||'Pinapangarap na Propesyonal');
     $('#reflection-text').textContent =
-      `Hindi naging madali ang paglalakbay na ito, pero bawat hakbang ay may naituro - mula sa aral ng tahanan at tambayan ng barkada, hanggang sa klasrum, workshop, at plaza ng bayan. ` +
-      `Natutunan kong ang edukasyon ay hindi lang grades o diploma; ito ang hubog ng aking isip, kasanayan, at pagkatao. ` +
-      `Sa tulong ng pamilya, guro, trainer, at komunidad, handa na akong harapin ang mundo bilang isang ${S.career || 'propesyonal'}. ` +
-      `Ang edukasyon ang tanglaw ko tungo sa aking pangarap - at ang pag-aaral ay hindi natatapos, ito'y patuloy na biyahe habambuhay.`;
+      'Hindi naging madali ang paglalakbay na ito, pero bawat hakbang ay may naituro - mula sa aral ng tahanan at tambayan ng barkada, hanggang sa klasrum, workshop, at plaza ng bayan. '+
+      'Natutunan kong ang edukasyon ay hindi lang grades o diploma; ito ang hubog ng aking isip, kasanayan, at pagkatao. '+
+      'Sa tulong ng pamilya, guro, trainer, at komunidad, handa na akong harapin ang mundo bilang isang '+(S.career||'propesyonal')+'. '+
+      'Ang edukasyon ang tanglaw ko tungo sa aking pangarap - at ang pag-aaral ay hindi natatapos, ito\u2019y patuloy na biyahe habambuhay.';
     $('#end-stats').innerHTML =
-      `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
-      `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
-      `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
-      S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+      '<span class="stat-chip">Kaalamán <b>'+S.knowledge+'</b></span>'+
+      '<span class="stat-chip">Kasanayan <b>'+S.skills+'</b></span>'+
+      '<span class="stat-chip">Pagpapahalaga <b>'+S.values+'</b></span>'+
+      S.passives.map(p=>'<span class="stat-chip passive-chip">&#9733; '+p+'</span>').join('');
     const sc = $('#reflection-scroll');
     sc.classList.remove('open');
     setTimeout(()=>sc.classList.add('open'), 700);
@@ -1358,12 +1863,12 @@ function showEnding(){
    ========================================================= */
 $('#btn-new').addEventListener('click', ()=>{
   const grid = $('#career-grid');
-  grid.innerHTML = '';
+  grid.innerHTML='';
   CAREERS.forEach(c=>{
-    const b = document.createElement('button');
+    const b=document.createElement('button');
     b.className='career-opt'; b.textContent=c;
     b.onclick=()=>{
-      S = freshState(); S.career = c; saveState();
+      S=freshState(); S.career=c; saveState();
       $('#career-modal').classList.remove('active');
       fade(()=>{ show('#screen-map'); renderMap(); });
     };
@@ -1375,18 +1880,9 @@ $('#btn-continue').addEventListener('click', ()=>{
   S = loadState();
   fade(()=>{ show('#screen-map'); renderMap(); });
 });
-if(loadState()) $('#btn-continue').disabled = false;
+if(loadState()) $('#btn-continue').disabled=false;
 
-$('#quit-btn').addEventListener('click', ()=>{
-  clearInterval(Act.timer);
-  $('#activity').classList.remove('active');
-  $('#dialogue').style.display = 'none';
-  dlgDone = null; dlgQueue = [];
-  fade(()=>{ show('#screen-map'); renderMap(); });
-});
-
-/* boot */
-initFX();
+resizeGame();
 </script>
 </body>
 </html>
