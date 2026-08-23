@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="fil">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lakbay Kinabukasan</title>
+<style>
+  /* ---------- base ---------- */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    font-family:'Segoe UI', Tahoma, sans-serif;
+    background:#1a1d2e;
+    color:#f2ead8;
+    user-select:none;
+  }
+  button { font-family:inherit; cursor:pointer; }
+
+  /* ---------- overlays ---------- */
+  #fx { position:fixed; inset:0; z-index:2; pointer-events:none; }
+  #vignette {
+    position:fixed; inset:0; z-index:3; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(10,8,16,.55) 100%);
+  }
+  #grain {
+    position:fixed; inset:-50%; width:200%; height:200%; z-index:4; pointer-events:none;
+    opacity:.045;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2"/></filter><rect width="240" height="240" filter="url(%23n)"/></svg>');
+    animation:grain 0.9s steps(4) infinite;
+  }
+  @keyframes grain {
+    0%{transform:translate(0,0)} 25%{transform:translate(-2%,1%)}
+    50%{transform:translate(1%,-2%)} 75%{transform:translate(-1%,2%)} 100%{transform:translate(0,0)}
+  }
+
+  /* ---------- screens ---------- */
+  .screen { position:fixed; inset:0; display:none; z-index:5; }
+  .screen.active { display:block; }
+
+  /* ---------- title ---------- */
+  #screen-title {
+    display:none;
+    background:linear-gradient(#2b3a5e 0%, #4a4a7a 45%, #c97a5a 78%, #e8a86b 100%);
+    align-items:center; justify-content:center; flex-direction:column; text-align:center;
+  }
+  #screen-title.active { display:flex; }
+  .title-card { position:relative; z-index:6; padding:20px; }
+  .title-kicker {
+    letter-spacing:.45em; font-size:13px; text-transform:uppercase;
+    color:#ffe3b0; opacity:.85; margin-bottom:14px;
+  }
+  h1.game-title {
+    font-family:Georgia, 'Times New Roman', serif;
+    font-size:clamp(38px, 7vw, 74px);
+    letter-spacing:.04em; line-height:1.05;
+    color:#fff4dc;
+    text-shadow:0 3px 0 rgba(90,40,30,.45), 0 10px 30px rgba(0,0,0,.35);
+  }
+  .title-sub {
+    margin-top:14px; font-style:italic; color:#ffe9c9; font-size:clamp(14px,2vw,18px);
+    text-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+  .title-btns { margin-top:42px; display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .btn {
+    border:none; border-radius:10px; padding:13px 34px;
+    font-size:17px; letter-spacing:.06em;
+    background:#f4e3c2; color:#4a2f22;
+    box-shadow:0 4px 0 #b08a5f, 0 8px 18px rgba(0,0,0,.3);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover:not(:disabled){ transform:translateY(-2px); box-shadow:0 6px 0 #b08a5f, 0 12px 22px rgba(0,0,0,.35); }
+  .btn:active:not(:disabled){ transform:translateY(2px); box-shadow:0 2px 0 #b08a5f; }
+  .btn:disabled{ opacity:.45; cursor:default; }
+  .btn.dark { background:#3a3350; color:#f2ead8; box-shadow:0 4px 0 #211c30, 0 8px 18px rgba(0,0,0,.3); }
+  .btn.small { padding:8px 18px; font-size:14px; }
+  .title-foot { position:absolute; bottom:18px; width:100%; text-align:center; font-size:12px; color:rgba(255,240,220,.55); z-index:6; }
+
+  /* ---------- career picker ---------- */
+  #career-modal {
+    position:fixed; inset:0; z-index:40; display:none;
+    align-items:center; justify-content:center; background:rgba(12,10,20,.72);
+  }
+  #career-modal.active { display:flex; }
+  .career-card {
+    background:#f6ecd8; color:#3a2c20; border-radius:14px;
+    padding:30px 34px; max-width:520px; width:92%;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    text-align:center;
+  }
+  .career-card h2 { font-family:Georgia, serif; margin-bottom:6px; }
+  .career-card p { font-size:14px; color:#6a5644; margin-bottom:20px; }
+  .career-grid { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  .career-opt {
+    border:2px solid #c9b291; background:#fdf6e8; border-radius:10px;
+    padding:12px 18px; font-size:15px; color:#4a3826;
+    transition:all .15s ease;
+  }
+  .career-opt:hover { border-color:#c97a3a; background:#fff; transform:translateY(-2px); }
+
+  /* ---------- map ---------- */
+  #screen-map { background:linear-gradient(#20304a 0%, #3a4a6a 55%, #6a7a8a 100%); }
+  .map-head {
+    position:absolute; top:0; left:0; right:0; z-index:8;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 22px;
+  }
+  .map-head h2 { font-family:Georgia, serif; font-size:22px; color:#f4e8cc; text-shadow:0 2px 6px rgba(0,0,0,.4); }
+  .map-stats { display:flex; gap:14px; font-size:13px; }
+  .stat-chip {
+    background:rgba(20,24,40,.65); border:1px solid rgba(255,235,200,.25);
+    padding:6px 12px; border-radius:20px; color:#f2e4c4;
+  }
+  .stat-chip b { color:#ffd98a; }
+  #map-wrap { position:absolute; inset:0; }
+  #map-path { position:absolute; inset:0; width:100%; height:100%; }
+  .node {
+    position:absolute; transform:translate(-50%,-50%);
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    background:none; border:none; z-index:7;
+  }
+  .node-dot {
+    width:34px; height:34px; border-radius:50%;
+    background:#f4e3c2; border:3px solid #8a6a48;
+    box-shadow:0 3px 8px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:bold; color:#5a4028; font-size:14px;
+    transition:transform .15s ease;
+  }
+  .node-label {
+    font-size:11px; color:#f4ecd8; text-shadow:0 1px 4px rgba(0,0,0,.7);
+    max-width:110px; text-align:center; line-height:1.25;
+  }
+  .node.done .node-dot { background:#a8d8a0; border-color:#4a7a48; color:#2a4a28; }
+  .node.avail .node-dot { background:#ffd98a; border-color:#c98a3a; animation:pulse 1.6s ease-in-out infinite; }
+  .node.avail:hover .node-dot { transform:scale(1.15); }
+  .node.locked { opacity:.45; cursor:default; }
+  .node.locked .node-dot { background:#8a8a92; border-color:#55555e; color:#3a3a42; }
+  @keyframes pulse {
+    0%,100%{ box-shadow:0 3px 8px rgba(0,0,0,.4), 0 0 0 0 rgba(255,217,138,.55); }
+    50%{ box-shadow:0 3px 8px rgba(0,0,0,.4), 0 0 0 12px rgba(255,217,138,0); }
+  }
+  .map-hint {
+    position:absolute; bottom:16px; width:100%; text-align:center;
+    font-size:13px; color:rgba(240,230,210,.6); font-style:italic; z-index:7;
+  }
+
+  /* ---------- level scene ---------- */
+  #screen-level { overflow:hidden; }
+  #bg { position:absolute; inset:0; }
+  .layer { position:absolute; inset:0; will-change:transform; }
+  #ly-sky { background:var(--sky); transition:background 1s ease; }
+  #ly-celestial { transition:transform .3s ease-out; }
+  .sun {
+    position:absolute; width:110px; height:110px; border-radius:50%;
+    background:var(--cel); left:72%; top:16%;
+    box-shadow:0 0 60px 24px var(--cel-glow);
+    opacity:.9;
+  }
+  #ly-far svg, #ly-mid svg, #ly-ground svg { position:absolute; bottom:0; left:0; width:100%; height:auto; display:block; }
+  #ly-far { transition:transform .3s ease-out; }
+  #ly-mid { transition:transform .3s ease-out; }
+  #ly-ground { bottom:0; top:auto; height:22vh; min-height:110px; transition:transform .3s ease-out; }
+  #ly-ground svg { height:100%; }
+
+  /* dialogue box */
+  #dialogue {
+    position:absolute; left:50%; bottom:4vh; transform:translateX(-50%);
+    width:min(720px, 92vw); z-index:10; cursor:pointer;
+  }
+  .dlg-speaker {
+    display:inline-block; background:#3a2c22; color:#ffe3b0;
+    font-size:13px; letter-spacing:.12em; text-transform:uppercase;
+    padding:5px 16px; border-radius:8px 8px 0 0; margin-left:18px;
+    box-shadow:0 -2px 8px rgba(0,0,0,.3);
+  }
+  .dlg-box {
+    background:rgba(28,22,18,.92);
+    border:2px solid rgba(255,225,180,.35);
+    border-radius:12px; padding:18px 24px 20px;
+    min-height:96px;
+    box-shadow:0 10px 30px rgba(0,0,0,.45);
+    backdrop-filter:blur(3px);
+  }
+  .dlg-text {
+    font-family:'Segoe Print','Bradley Hand','Comic Sans MS',cursive;
+    font-size:clamp(15px, 2.2vw, 18px); line-height:1.55; color:#f6eedd;
+  }
+  .dlg-next {
+    text-align:right; font-size:12px; color:#c9a97a; margin-top:6px;
+    animation:bob 1.2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(3px)} }
+
+  /* activity area */
+  #activity {
+    position:absolute; inset:0; z-index:11; display:none;
+    align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(14,12,20,.45); backdrop-filter:blur(2px);
+    padding:20px;
+  }
+  #activity.active { display:flex; }
+  .act-card {
+    background:#f6ecd8; color:#3a2c20; border-radius:14px;
+    width:min(640px, 94vw); max-height:86vh; overflow-y:auto;
+    padding:26px 30px; box-shadow:0 20px 60px rgba(0,0,0,.55);
+  }
+  .act-title {
+    font-family:Georgia, serif; font-size:19px; margin-bottom:4px; color:#4a3018;
+  }
+  .act-count { font-size:12px; color:#8a705a; margin-bottom:14px; letter-spacing:.08em; }
+  .act-q {
+    font-size:16px; line-height:1.5; margin-bottom:18px;
+    font-family:'Segoe Print','Bradley Hand',cursive;
+  }
+  .choices { display:flex; flex-direction:column; gap:9px; }
+  .choice {
+    text-align:left; border:2px solid #cbb694; background:#fdf6e8;
+    border-radius:10px; padding:11px 16px; font-size:15px; color:#43331f;
+    transition:all .13s ease; line-height:1.4;
+  }
+  .choice:hover:not(:disabled){ border-color:#c97a3a; background:#fff; transform:translateX(4px); }
+  .choice.correct { border-color:#4a8a48; background:#e2f2df; }
+  .choice.wrong { border-color:#b84a4a; background:#f6dede; }
+  .choice:disabled { cursor:default; }
+  .act-feedback {
+    margin-top:14px; font-size:14px; min-height:20px; font-style:italic; color:#6a5240;
+  }
+  .act-next-row { margin-top:14px; text-align:right; display:none; }
+  .act-next-row.show { display:block; }
+  .timer-bar-wrap { height:8px; background:#e0d2ba; border-radius:4px; overflow:hidden; margin-bottom:16px; }
+  .timer-bar { height:100%; background:#c98a3a; width:100%; border-radius:4px; }
+  .timer-bar.low { background:#b84a4a; }
+
+  /* matching */
+  .match-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; }
+  .match-col { display:flex; flex-direction:column; gap:9px; }
+  .match-item {
+    text-align:left; border:2px solid #cbb694; background:#fdf6e8;
+    border-radius:10px; padding:10px 13px; font-size:13.5px; color:#43331f;
+    transition:all .13s ease; line-height:1.35;
+  }
+  .match-item.sel { border-color:#c97a3a; background:#ffeccd; }
+  .match-item.paired { border-color:#4a8a48; background:#e2f2df; opacity:.75; cursor:default; }
+  .match-item.shake { animation:shake .35s ease; border-color:#b84a4a; background:#f6dede; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+
+  /* ordering */
+  .order-list { display:flex; flex-direction:column; gap:9px; counter-reset:step; }
+  .order-item {
+    text-align:left; border:2px solid #cbb694; background:#fdf6e8;
+    border-radius:10px; padding:11px 16px; font-size:14.5px; color:#43331f;
+    transition:all .13s ease; line-height:1.4;
+  }
+  .order-item:hover:not(.locked) { border-color:#c97a3a; background:#fff; transform:translateX(4px); }
+  .order-item.locked { border-color:#4a8a48; background:#e2f2df; cursor:default; }
+  .order-item.locked::before {
+    counter-increment:step; content:counter(step) ". ";
+    font-weight:bold; color:#4a7a48; margin-right:4px;
+  }
+  .order-item.shake { animation:shake .35s ease; border-color:#b84a4a; background:#f6dede; }
+
+  /* reward overlay */
+  #reward-overlay {
+    position:fixed; inset:0; z-index:30; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(12,10,18,.7); backdrop-filter:blur(3px);
+  }
+  #reward-overlay.active { display:flex; }
+  .reward-card {
+    background:#f6ecd8; color:#3a2c20; border-radius:16px;
+    padding:36px 44px; text-align:center; max-width:460px; width:90%;
+    box-shadow:0 24px 70px rgba(0,0,0,.55);
+    animation:pop-in .4s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pop-in { from{ transform:scale(.7); opacity:0 } to{ transform:scale(1); opacity:1 } }
+  .reward-star { font-size:44px; color:#c98a3a; margin-bottom:8px; }
+  .reward-card h2 { font-family:Georgia, serif; margin-bottom:8px; }
+  .reward-gains { margin:16px 0 22px; display:flex; flex-direction:column; gap:7px; font-size:15px; }
+  .gain-line b { color:#a05a20; }
+  .passive-badge {
+    display:inline-block; margin-top:6px; padding:8px 18px;
+    background:#4a3826; color:#ffe3b0; border-radius:22px; font-size:14px;
+    letter-spacing:.05em;
+  }
+
+  /* ending */
+  #screen-end {
+    background:linear-gradient(#2b3a5e 0%, #6a5a7a 40%, #d99a5f 80%, #f0c070 100%);
+    display:none; align-items:center; justify-content:center; overflow-y:auto;
+  }
+  #screen-end.active { display:flex; }
+  .end-inner { text-align:center; padding:40px 20px; max-width:620px; width:100%; }
+  .arch {
+    width:150px; height:170px; margin:0 auto 20px; position:relative;
+  }
+  .arch svg { width:100%; height:100%; filter:drop-shadow(0 8px 20px rgba(0,0,0,.4)); }
+  .end-inner h2 { font-family:Georgia, serif; font-size:clamp(26px,4vw,38px); color:#fff4dc; text-shadow:0 3px 10px rgba(0,0,0,.4); }
+  .end-career { font-style:italic; color:#ffe9c9; margin-top:8px; font-size:17px; }
+  .scroll {
+    margin:30px auto 0; background:#f8f0da; color:#4a3826;
+    border-radius:8px; padding:30px 34px; max-width:540px;
+    box-shadow:0 16px 44px rgba(0,0,0,.45);
+    position:relative; text-align:left;
+    max-height:0; opacity:0; overflow:hidden; padding-top:0; padding-bottom:0;
+    transition:max-height 1.6s ease, opacity 1s ease .4s, padding 1.2s ease;
+  }
+  .scroll.open { max-height:600px; opacity:1; padding:30px 34px; }
+  .scroll::before, .scroll::after {
+    content:''; position:absolute; left:0; right:0; height:14px;
+    background:repeating-linear-gradient(90deg, #e8d8b4 0 14px, #dcc89e 14px 28px);
+  }
+  .scroll::before { top:0; border-radius:8px 8px 0 0; }
+  .scroll::after { bottom:0; border-radius:0 0 8px 8px; }
+  .scroll h3 { font-family:Georgia, serif; text-align:center; margin-bottom:14px; color:#6a4a28; }
+  .scroll p {
+    font-family:'Segoe Print','Bradley Hand',cursive;
+    font-size:15.5px; line-height:1.75;
+  }
+  .end-stats { margin-top:26px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .end-foot { margin-top:30px; font-size:13px; color:rgba(255,240,215,.65); font-style:italic; }
+
+  /* hud during level */
+  #hud {
+    position:absolute; top:14px; right:16px; z-index:12;
+    display:flex; gap:8px; font-size:12px;
+  }
+  #hud .stat-chip { font-size:12px; }
+  #hud .passive-chip { background:rgba(74,56,38,.8); border-color:rgba(255,227,176,.4); color:#ffe3b0; }
+  #quit-btn {
+    position:absolute; top:14px; left:16px; z-index:12;
+    background:rgba(20,24,40,.6); color:#e8d8b8; border:1px solid rgba(255,235,200,.3);
+    border-radius:8px; padding:7px 14px; font-size:12px;
+  }
+  #quit-btn:hover { background:rgba(40,30,50,.8); }
+
+  /* fade transitions */
+  #fader {
+    position:fixed; inset:0; background:#0c0a12; z-index:50;
+    pointer-events:none; opacity:0; transition:opacity .5s ease;
+  }
+  #fader.on { opacity:1; pointer-events:all; }
+</style>
+</head>
+<body>
+
+<canvas id="fx"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="fader"></div>
+
+<!-- ======== TITLE ======== -->
+<section id="screen-title" class="screen active">
+  <div class="title-card">
+    <div class="title-kicker">Isang Kuwento ng Edukasyon</div>
+    <h1 class="game-title">Lakbay<br>Kinabukasan</h1>
+    <div class="title-sub">12 antas. Isang pangarap. Handa ka na ba?</div>
+    <div class="title-btns">
+      <button class="btn" id="btn-new">Simula</button>
+      <button class="btn dark" id="btn-continue" disabled>Ituloy</button>
+    </div>
+  </div>
+  <div class="title-foot">UCSP project &middot; gumagana offline &middot; i-click ang "Simula" para magsimula</div>
+</section>
+
+<!-- ======== CAREER PICKER ======== -->
+<div id="career-modal">
+  <div class="career-card">
+    <h2>Ano ang pangarap mo?</h2>
+    <p>Piliin ang career na pinaglalakbay mo. Kasama ito sa dulo ng iyong kuwento.</p>
+    <div class="career-grid" id="career-grid"></div>
+  </div>
+</div>
+
+<!-- ======== MAP ======== -->
+<section id="screen-map" class="screen">
+  <div class="map-head">
+    <h2>Mapa ng Paglalakbay</h2>
+    <div class="map-stats" id="map-stats"></div>
+  </div>
+  <div id="map-wrap">
+    <svg id="map-path" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+  </div>
+  <div class="map-hint">Sunod-sunod na binubuksan ang mga antas &middot; i-click ang kumikinang na bilog</div>
+</section>
+
+<!-- ======== LEVEL SCENE ======== -->
+<section id="screen-level" class="screen">
+  <div id="bg">
+    <div class="layer" id="ly-sky"></div>
+    <div class="layer" id="ly-celestial"><div class="sun"></div></div>
+    <div class="layer" id="ly-far"></div>
+    <div class="layer" id="ly-mid"></div>
+    <div class="layer" id="ly-ground"></div>
+  </div>
+  <button id="quit-btn">&larr; Mapa</button>
+  <div id="hud"></div>
+  <div id="dialogue">
+    <span class="dlg-speaker" id="dlg-speaker"></span>
+    <div class="dlg-box">
+      <div class="dlg-text" id="dlg-text"></div>
+      <div class="dlg-next">&#9660; i-click</div>
+    </div>
+  </div>
+  <div id="activity">
+    <div class="act-card">
+      <div class="act-title" id="act-title"></div>
+      <div class="act-count" id="act-count"></div>
+      <div class="timer-bar-wrap" id="timer-wrap" style="display:none"><div class="timer-bar" id="timer-bar"></div></div>
+      <div id="act-body"></div>
+      <div class="act-feedback" id="act-feedback"></div>
+      <div class="act-next-row" id="act-next-row"><button class="btn dark small" id="act-next-btn">Sunod</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== REWARD ======== -->
+<div id="reward-overlay">
+  <div class="reward-card">
+    <div class="reward-star">&#9733;</div>
+    <h2 id="reward-title">Natapos!</h2>
+    <div class="reward-gains" id="reward-gains"></div>
+    <button class="btn" id="reward-btn">Balik sa Mapa</button>
+  </div>
+</div>
+
+<!-- ======== ENDING ======== -->
+<section id="screen-end" class="screen">
+  <div class="end-inner">
+    <div class="arch">
+      <svg viewBox="0 0 150 170">
+        <path d="M20 170 L20 70 Q75 10 130 70 L130 170 L108 170 L108 78 Q75 42 42 78 L42 170 Z" fill="#e8b45f" stroke="#a87f3a" stroke-width="3"/>
+        <circle cx="75" cy="52" r="9" fill="#fff0b8"/>
+        <path d="M30 170 L30 160 L120 160 L120 170 Z" fill="#c9954a"/>
+      </svg>
+    </div>
+    <h2>Congratulations, Batang Pangarap!</h2>
+    <div class="end-career" id="end-career"></div>
+    <div class="scroll" id="reflection-scroll">
+      <h3>&#9998; Ang Scroll ng Repleksyon</h3>
+      <p id="reflection-text"></p>
+    </div>
+    <div class="end-stats" id="end-stats"></div>
+    <div class="end-foot">Salamat sa paglalaro. Ang edukasyon ay hindi nagtatapos sa graduation &mdash; doon lang nagsisimula ang totoong paglalakbay.</div>
+  </div>
+</section>
+
+<script>
+/* =========================================================
+   Lakbay Kinabukasan - single-file mini RPG
+   walang external dependencies, lahat local
+   ========================================================= */
+'use strict';
+
+const $ = s => document.querySelector(s);
+const SAVE_KEY = 'lakbay_kinabukasan_v1';
+
+/* ---------- save state ---------- */
+let S = null;
+function freshState(){ return { unlocked:1, done:[], knowledge:0, skills:0, values:0, passives:[], career:null }; }
+function loadState(){
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveState(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
+
+/* ---------- careers ---------- */
+const CAREERS = ['Doktor','Guro','Inhinyero','Programmer','Chef','Accountant'];
+
+/* =========================================================
+   LEVEL DATA - lahat ng dialogue at activities dito
+   ========================================================= */
+const LEVELS = [
+/* ---- 1 ---- */
+{
+  n:1, name:'Home Village', short:'Home Village', kind:'Impormal na Edukasyon',
+  theme:'village',
+  pal:{ sky:'linear-gradient(#ffd9a0,#ff9e6d)', cel:'#ffcf6f', celGlow:'rgba(255,207,111,.5)',
+        far:'#7fae7a', mid:'#5c8f5f', ground:'#4a7a52', fx:'#ffe9b0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Sabado ng umaga. Amoy sinangag at tsokolaten mula sa kusina. Kahapon pa sira ang gripo, kaya alam mo nang may ipapagawa si Nanay.' },
+    { sp:'Nanay', t:'Uy, gising na pala! Kumain ka muna, anak. Pero bago yan... pakikuha nga ako ng tubig sa poso, please?' },
+    { sp:'Ikaw', t:'Po? Sige po, Nay. Kakain lang po sandali.' },
+    { sp:'Nanay', t:'Ang bait naman ng anak ko. Halika, habang kumakain ka, may mga tanong ako. Tingnan natin kung napakinggan mo ang mga turo namin ha.' }
+  ],
+  act:{
+    type:'quiz', title:'Aral mula sa Tahanan',
+    qs:[
+      { q:'Nanay: "Anak, pakikuha nga ng tubig sa poso bago ka maglaro." Ano ang pinaka-angkop na sagot?',
+        c:['"Ano ba, kakagising ko lang po... ah wait, sige na nga."','"Po, sige po Nay. Pagkatapos ko lang po ng hapunan."','"Si Ate na lang po ang tanungin niyo."','*walang sagot, tuloy laro ng cellphone*'],
+        a:1, why:'Ang pagsagot nang may "po" at pagsunod sa magulang ay senyales ng paggalang at kagandahang-loob.' },
+      { q:'Nakapulot ka ng limampung piso sa may bubong. Ano ang itinuro ni Tatay na tamang gawin?',
+        c:['Itago at bilhin ng chips, swerte eh.','Isauli sa may-ari o ipaalam agad sa nakatatanda.','Ilagay sa alkansya, wala namang nakakita.','Hatiin sa kaibigan para walang away.'],
+        a:1, why:'Ang katapatan ay isa sa mga pangunahing aral na natututuhan sa tahanan, kahit walang nakakakita.' },
+      { q:'Habang masaya ang salu-salo, nagsasalita si Lola tungkol sa kabataan niya. Ano ang tamang gawin?',
+        c:['Sabayan siya ng kwento nang sabay-sabay kayo.','Makinig nang mabuti at magtanong pagkatapos niyang matapos.','Mag-excuse na at bumalik sa cellphone.','Buksan ang TV nang malakas para may background music.'],
+        a:1, why:'Ang pakikinig sa nakakatanda ay paggalang din - at dito nanggagaling ang maraming aral sa buhay.' }
+    ]
+  },
+  outro:[
+    { sp:'Nanay', t:'Ayan! Alam kong may pinagaralan kang mabuti, anak. Salamat ha, at kumain ka nang marami.' },
+    { sp:'Tagapagsalaysay', t:'+Values! Sa simpleng tahanan, natutunan mo ang paggalang, katapatan, at pakikinig.' }
+  ],
+  gain:{ values:15 }
+},
+/* ---- 2 ---- */
+{
+  n:2, name:'Peer Neighborhood', short:'Peer Neighborhood', kind:'Impormal na Edukasyon',
+  theme:'hood',
+  pal:{ sky:'linear-gradient(#ffe9b8,#f6a86b)', cel:'#ffbe6f', celGlow:'rgba(255,190,111,.45)',
+        far:'#8fb98a', mid:'#63976a', ground:'#557f57', fx:'#ffd9a0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Hapon sa kanto. Naroon si Kuya Raffy at ang barkada, tambay sa may sari-sari store gaya ng dati.' },
+    { sp:'Kuya Raffy', t:'Uy, eto na nga pala! May problema ako eh... group project namin, tapos yung isang kasama ko, sobrang hirap makasunod sa lesson. Iniwan na lang siya ng grupo.' },
+    { sp:'Ikaw', t:'Ah ganun ba... Ano plano niyo?' },
+    { sp:'Kuya Raffy', t:'Yun nga, iniisip ko. Ikaw kasi matalino ka eh - ano sa tingin mo ang dapat gawin sa katulad niyang sitwasyon?' }
+  ],
+  act:{
+    type:'quiz', title:'Tambayan ng Barkada',
+    qs:[
+      { q:'May kaklase kayong nahihirapan sa group project. Ano ang gagawin ng tunay na kaibigan?',
+        c:['Iwan na lang siya, madami naman kayo.','Tulungan siyang maintindihan ang lesson, kahit extra time.','Gawin mo na lang lahat para sa kanya.','Sabihan na mahina para matuto na.'],
+        a:1, why:'Ang pagtutulungan ay hindi ibig sabihin ay gawin mo lahat - ito ay pag-uwi sa sama-samang pag-unawa.' },
+      { q:'May bagyo. May nabahaang kapitbahay at nag-volunteer ang barkada na tumulong. Ano ang una ninyong gawin?',
+        c:['Manood muna ng balita bago magdesisyon.','Magdala ng pagkain, tubig, at tulungan maglinis ang pamilya.','Kunan ng pictures para sa social media story.','Magtago muna ng gamit para sa sarili.'],
+        a:1, why:'Ang bayanihan ay buhay pa rin - ang tunay na samahan ay nasusubok sa panahon ng pangangailangan.' },
+      { q:'Sa basketball, miss ng kakampi ninyo ang huling tira. Talo kayo nang isang punto. Ano ang sasabihin mo?',
+        c:['"Kasalanan mo talaga yan!"','Wala. Umuwi ka na lang nang tahimik at galit.','"Okay lang yan, pre. Buuin natin ulit next game."','Sumigaw sa referee hanggang matapos ang liga.'],
+        a:2, why:'Ang tunay na teamwork ay hindi lang panalo - ito ay pag-angat sa kaibigan sa oras ng pagkatalo.' }
+    ]
+  },
+  outro:[
+    { sp:'Kuya Raffy', t:'Tama ka jan, pre. Bukas, tuturuan ko yung kasama ko. Salamat ha!' },
+    { sp:'Tagapagsalaysay', t:'+Values! Sa barkada at kapitbahay, natutunan mo ang pagtutulungan at pakikipagkapwa-tao.' }
+  ],
+  gain:{ values:15 }
+},
+/* ---- 3 ---- */
+{
+  n:3, name:'Digital Realm', short:'Digital Realm', kind:'Impormal na Edukasyon',
+  theme:'digital',
+  pal:{ sky:'linear-gradient(#1b1f3f,#3d2b63)', cel:'#cfd8ff', celGlow:'rgba(207,216,255,.35)',
+        far:'#2a2f5e', mid:'#232850', ground:'#191c38', fx:'#8fd8ff' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Gabi na. Dapat tulog ka na, pero hawak mo pa rin ang phone mo. Scrolling ka sa feed habang kumikislap ang mga notification.' },
+    { sp:'Ikaw', t:'Grabe ang daming balita ngayon ah... Alin kaya dito ang totoo?' },
+    { sp:'Tagapagsalaysay', t:'Sa mundong digital, hindi lahat ng nakikita ay totoo. Subukan mong kilalanin - alin ang FACT, alin ang FAKE?' }
+  ],
+  act:{
+    type:'quiz', title:'Fact o Fake?', style:'factfake',
+    qs:[
+      { q:'POST: "BREAKING!! May bagyo daw bukas na kasing-lakas ng 100 giants!!! SHARE AGAD, walang announcement ang PAGASA pero sure yan!!!"',
+        c:['FACT','FAKE'], a:1,
+        why:'FAKE. Walang source, walang opisyal na abiso mula sa PAGASA, at sobrang dramang wika - classic na fake news.' },
+      { q:'POST: "Ayon sa Department of Health, ang regular na paghuhugas ng kamay ay nakakatulong maiwasan ang impeksyon."',
+        c:['FACT','FAKE'], a:0,
+        why:'FACT. May malinaw na source (DOH) at tugma sa scientific evidence.' },
+      { q:'POST: "CONFIRMED NG SCIENTIST NA TAGA-INTERNET: Kapag nakagat ka ng aswang, magiging multo ka rin. Share para malaman ng lahat!"',
+        c:['FACT','FAKE'], a:1,
+        why:'FAKE. Walang tunay na scientist, walang study, at imposible ang claim. Huwag mag-share nang hindi nagche-check!' },
+      { q:'POST: "Ang PAGASA ay opisyal na ahensya ng pamahalaan na nagbibigay ng weather forecast sa Pilipinas."',
+        c:['FACT','FAKE'], a:0,
+        why:'FACT. Totoo ito - PAGASA ang opisyal na weather bureau ng bansa.' }
+    ]
+  },
+  outro:[
+    { sp:'Ikaw', t:'Buti nalang nacheck ko... Delikado pala mag-share nang basta-basta.' },
+    { sp:'Tagapagsalaysay', t:'+Knowledge! Sa digital na mundo, natutunan mong maging mapanuri sa media at impormasyon.' }
+  ],
+  gain:{ knowledge:15 }
+},
+/* ---- 4 ---- */
+{
+  n:4, name:'Shrine ng Isip', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  theme:'shrine',
+  pal:{ sky:'linear-gradient(#cfe8e4,#8fc6bd)', cel:'#f6f0d0', celGlow:'rgba(246,240,208,.4)',
+        far:'#7aa89b', mid:'#5d8f83', ground:'#4c7a6f', fx:'#d0f0e0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Sa pagitan ng dalawang bundok, may lihim na lugar - isang shrine na sinaunang nakaukit ang mga salita: "Ang problemang hindi hinaharap, kasama mo habambuhay."' },
+    { sp:'Mang Ben, Tagabantay ng Shrine', t:'Maligayang pagdating, batang lakwatsero. Bago kita bigyan ng kapangyarihang Problem-Solving, kailangan mong patunayan na kaya mong itugma ang bawat suliranin sa tamang lunas.' },
+    { sp:'Ikaw', t:'Handa po ako, Mang Ben.' },
+    { sp:'Mang Ben', t:'Marahil. I-click ang isang suliranin, at pagkatapos ang tamang solusyon sa kabilang panig.' }
+  ],
+  act:{
+    type:'match', title:'Pagtugma ng Suliranin at Lunas',
+    pairs:[
+      { l:'Flat tire ang bisikleta mo papuntang paaralan', r:'Ayusin o palitan ang gulong bago umalis' },
+      { l:'Hindi mo maintindihan ang math lesson', l2:true, r:'Mag-review nang mabuti at magtanong sa titser' },
+      { l:'Nawalan ng kuryente habang nagta-type ka ng assignment', r:'I-save regularly at gumamit ng power bank' },
+      { l:'Nalilito ka sa dami ng school requirements', r:'Gumawa ng checklist at planner' }
+    ]
+  },
+  outro:[
+    { sp:'Mang Ben', t:'Mahusay. Tanggapin mo ito - ang kapangyarihang Problem-Solving. Gamitin ito nang wasto.' },
+    { sp:'Tagapagsalaysay', t:'UNLOCKED: Problem-Solving! Mula ngayon, hindi ka na natatakot sa mga hamon - pinaplano mo ang solusyon.' }
+  ],
+  gain:{ passive:'Problem-Solving' }
+},
+/* ---- 5 ---- */
+{
+  n:5, name:'Classroom Dungeons I', short:'Classroom Dungeons', kind:'Formal na Edukasyon',
+  theme:'school',
+  pal:{ sky:'linear-gradient(#b8cfe8,#e8d9b8)', cel:'#fff0c0', celGlow:'rgba(255,240,192,.4)',
+        far:'#8aa0b8', mid:'#6d84a0', ground:'#5a6f88', fx:'#e8e0c0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Ang pinto ng silid-aralan ay tila pintong yelo sa loob ng dungeon. Ngunit sa halip na monsters, naroon ang blackboard, chalk, at isang titser na may dala-dalang questionnaire.' },
+    { sp:'Ma\'am Santos', t:'Pasok! Oho, huwag kang matakot. Ang tunay na kalaban sa classroom dungeon ay ang hindi pag-aaral. Handa ka na ba sa quiz battle?' },
+    { sp:'Ikaw', t:'Po... handa na po, Ma\'am!' },
+    { sp:'Ma\'am Santos', t:'Sige. Simpleng warm-up muna. Kapag nalampasan mo ito, mas mahihirap pa ang susunod.' }
+  ],
+  act:{
+    type:'quiz', title:'Quiz Battle: Warm-Up',
+    qs:[
+      { q:'Ano ang pambansang ibon ng Pilipinas?',
+        c:['Maya','Philippine Eagle','Kalapati','Tagak'], a:1,
+        why:'Ang Philippine Eagle ang pambansang ibon ng Pilipinas - isa sa pinakamalaking eagle sa mundo.' },
+      { q:'12 × 8 = ?',
+        c:['86','92','96','104'], a:2,
+        why:'12 × 8 = 96. Basic multiplication na madalas gamitin sa pang-araw-araw na buhay.' },
+      { q:'Ano ang kapital ng Pilipinas?',
+        c:['Cebu City','Davao City','Quezon City','Manila'], a:3,
+        why:'Ang Maynila ang kapital ng Pilipinas simula pa noong panahon ng Kastila.' },
+      { q:'Aling planeta ang kilala bilang "Red Planet"?',
+        c:['Venus','Jupiter','Mars','Saturn'], a:2,
+        why:'Ang Mars ang tinatawag na Red Planet dahil sa iron oxide (kalawang) sa ibabaw nito.' }
+    ]
+  },
+  outro:[
+    { sp:'Ma\'am Santos', t:'Very good! Nakita ko ang iyong effort. Ito ang simula pa lamang - sa susunod na dungeon, mas challenging.' },
+    { sp:'Tagapagsalaysay', t:'+Knowledge! Ang formal education ay nagsisimula sa classroom - aral, pagsusulit, at tiyaga.' }
+  ],
+  gain:{ knowledge:15 }
+},
+/* ---- 6 ---- */
+{
+  n:6, name:'Skill Workshops I', short:'Skill Workshops', kind:'Non-Formal na Edukasyon',
+  theme:'workshop',
+  pal:{ sky:'linear-gradient(#3a2f28,#7a4f33)', cel:'#ffb060', celGlow:'rgba(255,176,96,.35)',
+        far:'#4f3d30', mid:'#3d2f26', ground:'#33281f', fx:'#ffc890' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Amoy kahoy at mainit na bakal ang hangin. Sa loob ng workshop, kumikislap ang mga kagamitan at naririnig ang tunog ng mga nag-aaral ng praktikal na skills.' },
+    { sp:'Trainer Marco', t:'O, welcome sa workshop! Dito sa TESDA-style training, hindi lang teorya ang usapan - praktikal na kasanayan ang kailangan.' },
+    { sp:'Ikaw', t:'Ano pong unang gawin, Trainer?' },
+    { sp:'Trainer Marco', t:'Simple lang. Bago ka mag-master ng kahit anong skill, kailangan alam mo ang tamang pagkakasunod-sunod ng mga hakbang. Tingnan natin kung may common sense ka.' }
+  ],
+  act:{
+    type:'order', title:'Ayusin ang mga Hakbang: Pagluluto ng Adobo',
+    steps:[
+      'Hugasan at ihanda ang karne',
+      'Idagdag ang toyo, suka, bawang, at laurel',
+      'Pakuluin at bantayan hanggang lumambot ang karne',
+      'Tikman at idagdag ang patis kung kulang sa alat',
+      'Ihain nang mainit kasama ang kanin'
+    ]
+  },
+  outro:[
+    { sp:'Trainer Marco', t:'Ayan! Sunod-sunod, tama ang proseso. Yan ang kaibahan ng marunong sa bihasa - proseso.' },
+    { sp:'Tagapagsalaysay', t:'+Skills! Sa non-formal education tulad ng workshops, natututo ka ng praktikal na kasanayang gamit sa tunay na buhay.' }
+  ],
+  gain:{ skills:15 }
+},
+/* ---- 7 ---- */
+{
+  n:7, name:'Dawn Shrine', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  theme:'dawn',
+  pal:{ sky:'linear-gradient(#f6c6cf,#f9e2c0)', cel:'#fff0d8', celGlow:'rgba(255,240,216,.5)',
+        far:'#c98f9b', mid:'#a06f80', ground:'#8a5f70', fx:'#ffe0e8' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Madaling-araw. Ang ikalawang shrine ay nasa tuktok ng burol, kung saan unang tumatama ang sikat ng araw. Nakaukit dito: "Ang karakter ay kung ano ang ginagawa mo kapag walang nanonood."' },
+    { sp:'Aling Nena, Tagabantay ng Shrine', t:'Halika, iho/iha. Ang ikalawang pasada ay ukol sa karakter. Hindi ito nasusukat sa grades - nasusukat sa mga desisyon mo kapag walang nakakakita.' },
+    { sp:'Ikaw', t:'Paano ko po ito mapapatunayan?' },
+    { sp:'Aling Nena', t:'Sagutin mo ang mga sitwasyon. Totohanan, ha. Wag yung sagot na alam mong gusto kong marinig.' }
+  ],
+  act:{
+    type:'quiz', title:'Pagsubok ng Karakter',
+    qs:[
+      { q:'Nagpadala ang kaklase mo ng sagot sa exam through text. Walang nakakakita. Ano ang gagawin mo?',
+        c:['Kopyahin na lang, sayang naman ang sagot.','Hindi kokopyahin - sariling sagot pa rin, kahit mali.','I-share pa sa ibang kaklase para fair.','Mag-cr na lang at umalis sa exam room.'],
+        a:1, why:'Ang integridad ay nasusubok sa oras na walang nagbabantay. Ang sariling sikap na mali ay mas mahalaga kaysa sa dayang tama.' },
+      { q:'Nagbayad ka ng ₱50 sa tindahan, pero nagbigay ang tindera ng sukli na para sa ₱500. Ano ang gagawin mo?',
+        c:['Keep it - swerte lang talaga.','Isauli: "Ate, mali po yata ang sukli ninyo."','Ilagay sa bulsa nang tahimik.','Hatiin sa kaibigan para walang testigo.'],
+        a:1, why:'Ang maliit na katapatan ay nagpapakita ng malaking karakter. Ang ₱450 ay hindi sulit sa peace of mind.' },
+      { q:'Nasira mo ang pinggang hiram ng kapitbahay. Walang nakakita. Ano ang tama?',
+        c:['Itago ang mga basag at manahimik.','Aminin at mag-sorry, mag-offer na palitan ito.','Sisihin ang pusa ng kapitbahay.','Iwan na lang sa pinto nila nang tahimik.'],
+        a:1, why:'Ang pag-amin sa pagkakamali ay senyales ng mature na karakter - hindi takas, kundi pananagutan.' }
+    ]
+  },
+  outro:[
+    { sp:'Aling Nena', t:'Hmm... Hindi masama. May karakter ka nga. Tanggapin mo ito - Strong Character Traits.' },
+    { sp:'Tagapagsalaysay', t:'UNLOCKED: Strong Character! Katapatan, pananagutan, at integridad - kasama mo na ito habambuhay.' }
+  ],
+  gain:{ passive:'Strong Character' }
+},
+/* ---- 8 ---- */
+{
+  n:8, name:'Classroom Dungeons II', short:'Classroom Dungeons', kind:'Formal na Edukasyon',
+  theme:'deep',
+  pal:{ sky:'linear-gradient(#2a3050,#4a4068)', cel:'#e0d8f0', celGlow:'rgba(224,216,240,.3)',
+        far:'#333a5e', mid:'#282e4c', ground:'#20243c', fx:'#b0a8e0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Mas malalim na antas ng dungeon. Mas madilim, mas malamig, at ang mga tanong sa dingding ay tila gumagalaw.' },
+    { sp:'Ma\'am Santos', t:'Balik ka ulit! Ngayon naman, medyo mapapasubok ka na. Mixed subjects ito - history, science, math. Ready?' },
+    { sp:'Ikaw', t:'Sige po, Ma\'am. Kaya ko po ito.' },
+    { sp:'Ma\'am Santos', t:'Yan ang spirit! Tandaan: hindi ka bobo kapag nagkamali. Bobo ka lang kapag tumigil kang matuto.' }
+  ],
+  act:{
+    type:'quiz', title:'Quiz Battle: Deep Floor',
+    qs:[
+      { q:'Sino ang sumulat ng "Noli Me Tangere"?',
+        c:['Andres Bonifacio','Dr. José Rizal','Apolinario Mabini','Emilio Aguinaldo'], a:1,
+        why:'Si Dr. José Rizal ang sumulat ng Noli Me Tangere noong 1887 - nobelang nagmulat sa mga Pilipino.' },
+      { q:'Ano ang chemical formula ng tubig?',
+        c:['CO₂','O₂','H₂O','NaCl'], a:2,
+        why:'Ang tubig ay H₂O - dalawang atom ng hydrogen at isang oxygen.' },
+      { q:'May ₱250 ka. Bawat notebook ay ₱45. Ilang notebook ang mabibili mo, at magkano ang matitira?',
+        c:['5 notebooks, ₱25 sukli','6 notebooks, ₱20 sukli','4 notebooks, ₱70 sukli','5 notebooks, ₱35 sukli'],
+        a:0, why:'₱45 × 5 = ₱225. ₱250 − ₱225 = ₱25. Math na ginagamit sa totoong shopping.' },
+      { q:'Ilang kontinente mayroon sa mundo?',
+        c:['5','6','7','8'], a:2,
+        why:'Pito: Asia, Africa, North America, South America, Antarctica, Europe, at Australia.' }
+    ]
+  },
+  outro:[
+    { sp:'Ma\'am Santos', t:'Very good! Lumalalim na ang kaalaman mo. Konting push na lang at ready ka na sa mas malalaking hamon.' },
+    { sp:'Tagapagsalaysay', t:'+Knowledge! Ang formal education ay hagdan-hagdanan - bawat antas ay mas mataas na lebel ng pagkatuto.' }
+  ],
+  gain:{ knowledge:15 }
+},
+/* ---- 9 ---- */
+{
+  n:9, name:'Skill Workshops II', short:'Skill Workshops', kind:'Non-Formal na Edukasyon',
+  theme:'forge',
+  pal:{ sky:'linear-gradient(#4a3524,#8f5a35)', cel:'#ffa860', celGlow:'rgba(255,168,96,.4)',
+        far:'#5a4030', mid:'#463222', ground:'#3a2a1e', fx:'#ffc890' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Ang advanced section ng workshop. Dito, hindi na sunod-sunod na hakbang ang pinag-uusapan - kundi paggamit ng skills sa totoong sitwasyon.' },
+    { sp:'Trainer Marco', t:'Balik! Ngayon, situational na tayo. Bibigyan kita ng mga tunay na problema - tingnan natin kung magagamit mo ang natutunan mo.' },
+    { sp:'Ikaw', t:'Anong klaseng problema po?' },
+    { sp:'Trainer Marco', t:'Emergency, technical, practical. Yung mga tipong hindi mo makikita sa libro pero mangyayari sa buhay mo. Game?' }
+  ],
+  act:{
+    type:'quiz', title:'Praktikal na Pagsusulit',
+    qs:[
+      { q:'Nasusunog ang mantika sa kawali habang nagluluto ka. Ano ang UNANG hakbang?',
+        c:['Buhusan ng tubig ang kawali.','Takpan ang kawali at patayin ang apoy.','Tumakbo palayo at tawagin ang kapitbahay.','Kunan muna ng video bago mag-panic.'],
+        a:1, why:'Huwag bubuhusan ng tubig ang nagliliyabeng mantika - sisiklab ito nang husto. Takpan at patayin ang apoy.' },
+      { q:'Hindi gumagana ang desktop PC. Walang ilaw kahit anong pindot. Ano ang UNANG che-check?',
+        c:['Bumili agad ng bagong PC.','Ang saksakan at power cable kung nakasaksak nang maayos.','Basagin ang CPU case para makita ang loob.','Magdasal na lang nang paulit-ulit.'],
+        a:1, why:'Basic troubleshooting: simulan lagi sa pinakasimpleng posibleng sanhi - power source.' },
+      { q:'Nasugatan ang kaklase mo sa PE, dumadaloy ang dugo. Ano ang tamang first aid?',
+        c:['Lagyan ng lupa para "natural healing".','Linisin ang sugat at takpan ng malinis na tela o bandage.','Hintayin lang tumigil mag-isa kahit marami nang dugo.','Takpan ng sticky note at tuloy ang laro.'],
+        a:1, why:'First aid basics: linisin, i-pressure, at takpan ng malinis na tela. Kung malalim, humingi ng medical help.' }
+    ]
+  },
+  outro:[
+    { sp:'Trainer Marco', t:'Pass ka! Heto ang certificate mo - National Certificate level vibes. Gamitin mo ito nang tama ha.' },
+    { sp:'Tagapagsalaysay', t:'+Skills! Non-formal education tulad ng TESDA training ay nagbibigay ng kwalipikasyong pwedeng gamitin agad sa trabaho.' }
+  ],
+  gain:{ skills:15 }
+},
+/* ---- 10 ---- */
+{
+  n:10, name:'Plaza ng Bayan', short:'Stat Boost Stop', kind:'Stat Boost Stop',
+  theme:'plaza',
+  pal:{ sky:'linear-gradient(#ffe3a8,#ffc07a)', cel:'#fff0b8', celGlow:'rgba(255,240,184,.5)',
+        far:'#a8bf8a', mid:'#7fa06a', ground:'#6a8a5c', fx:'#fff0c0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Sa harap ng barangay hall, may huling shrine - hindi ito gawa sa bato, kundi gawa sa prinsipyo. Nakaukit: "Ang edukasyong hindi nakikinabang ang bayan ay kulang pa."' },
+    { sp:'Kap. Reyes, Tagabantay ng Plaza', t:'Huling pasada, anak. Ang civic awareness - pag-unawa sa iyong tungkulin bilang mamamayan. Hindi ito optional sa lipunan natin.' },
+    { sp:'Ikaw', t:'Ano po ang mga tanong, Kap?' },
+    { sp:'Kap. Reyes', t:'Mga sitwasyon sa komunidad. Sagutin mo nang tapat, at malalaman mo kung handa ka nang maging aktibong mamamayan.' }
+  ],
+  act:{
+    type:'quiz', title:'Pagsubok ng Pagkamamamayan',
+    qs:[
+      { q:'Bakit mahalaga ang pagboto sa eleksyon?',
+        c:['Para may ma-post sa social media na "nag-vote ako".','Dahil ito ang tinig ng mamamayan sa pagpili ng liderato.','Wala namang mangyayari kahit bumoto o hindi.','Para lang sa mga sikat na kandidato.'],
+        a:1, why:'Ang boto ng bawat mamamayan ay kapangyarihang pantay-pantay - ito ang puso ng demokrasya.' },
+      { q:'May kalat sa may barangay hall. Ano ang responsableng gawin ng mamamayan?',
+        c:['Hintayin na linisin ng barangay tanod.','Magtambak pa ng dagdag na basura.','Pulutin ang kalat o sumali sa clean-up drive.','Kunan lang ng video at i-upload.'],
+        a:2, why:'Ang malinis na komunidad ay responsibilidad ng LAHAT - hindi lang ng government workers.' },
+      { q:'Ayon sa Saligang Batas, ano ang mga pangunahing tungkulin ng mamamayan?',
+        c:['Wala - libre ang lahat sa Pilipinas.','Sundin ang batas, magbayad ng buwis, at makilahok sa komunidad.','Gawin ang gustong gawin basta walang pulis.','Bumoto lang tuwing eleksyon, tapos na.'],
+        a:1, why:'Ang citizenship ay may karapatan AT tungkulin - ang isa ay hindi kumpleto nang wala ang isa.' }
+    ]
+  },
+  outro:[
+    { sp:'Kap. Reyes', t:'Magaling. May pangarap ka hindi lang para sa sarili, kundi para sa bayan. Tanggapin mo ito.' },
+    { sp:'Tagapagsalaysay', t:'UNLOCKED: Civic Awareness! Alam mo na ang iyong tungkulin bilang mamamayan - at hindi ka takot gamitin ang boses mo.' }
+  ],
+  gain:{ passive:'Civic Awareness' }
+},
+/* ---- 11 ---- */
+{
+  n:11, name:'Final Career Challenge', short:'Final Challenge', kind:'Final Exam',
+  theme:'exam',
+  pal:{ sky:'linear-gradient(#1f2333,#3a2740)', cel:'#e0d8f0', celGlow:'rgba(224,216,240,.3)',
+        far:'#2c3048', mid:'#232741', ground:'#1a1d2e', fx:'#e0a0a0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'Ang huling tarangkahan. Walang bida-bida, walang shortcut. Ang nakasulat sa pinto: "DITO NASUSUBOK ANG LAHAT NG NATUTUNAN MO."' },
+    { sp:'Tagapagsalaysay', t:'Ang Final Career Challenge - isang pagsusulit na tumutugma sa tunay na mundo. May oras bawat tanong. Kailangan ang lahat: kaalaman, kasanayan, valores, at ang tatlong passive powers mo.' },
+    { sp:'Ikaw', t:'Kinakabahan ako... pero handa na ako. Dala-dala ko lahat ng aral mula sa pamilya, barkada, paaralan, at komunidad.' },
+    { sp:'Tagapagsalaysay', t:'Simula na. Bawat tanong, may takdang oras. Focus.' }
+  ],
+  act:{
+    type:'quiz', title:'FINAL EXAM: Career Readiness', timer:20,
+    qs:[
+      { q:'Ano ang unang hakbang sa paglutas ng anumang problema?',
+        c:['Agad-agad na gumawa ng solusyon.','Tukuyin at unawain muna ang problema.','Hintayin na lang lumala para malinaw.','Iwasan ang problema hanggang mawala.'],
+        a:1, why:'Ang Problem-Solving power mo: unawain muna bago kumilos. Hindi maaaring lutasin ang hindi nauunawaan.' },
+      { q:'Sa workplace, paano mo ipapakita ang paggalang sa mas nakakatanda o mas senior sa iyo?',
+        c:['Paggamit ng magalang na pananalita at pakikinig sa kanilang karanasan.','Pagtabla-tablingan sila para mapansin.','Ignore na lang, work mode lang lagi.','Sabihin na mas bata ka kaya mas updated ka.'],
+        a:0, why:'Ang Values mula sa Home Village: ang "po" at "opo" ng puso - magalang sa anumang edad at ranggo.' },
+      { q:'May nabasa kang alarming na balita online. Ano ang una mong gagawin bago ito i-share?',
+        c:['Share agad, baka mahuli ang balita.','I-check kung may opisyal na source (ahensya, news outlet, eksperto).','Tanungin sa group chat kung totoo daw.','Edit-an ng caption tapos share.'],
+        a:1, why:'Media literacy mula sa Digital Realm: i-verify ang source bago magkalat ng impormasyon.' },
+      { q:'Ano ang pangunahing benepisyo ng non-formal education tulad ng TESDA training?',
+        c:['Mas maraming free time.','Praktikal na kasanayan at sertipikasyon na pwedeng gamitin agad sa trabaho.','Pwedeng i-skip ang high school.','Walang exam, walang pressure.'],
+        a:1, why:'Ang Skills mula sa Workshops: hands-on training na direktang nagbubukas ng pintuan sa employment.' },
+      { q:'Bakit mahalaga ang civic consciousness sa isang propesyonal?',
+        c:['Para may ma-flex sa resume.','Dahil ang propesyonal ay mamamayan din - may tungkulin sa komunidad at batas.','Wala namang connection ang trabaho at bayan.','Para lang sa mga nasa government.'],
+        a:1, why:'Ang Civic Awareness mo: ang tunay na propesyonal ay nakikinabang at nakakatulong sa lipunan.' },
+      { q:'May deadline kayo kanina sa trabaho at hindi natapos ang proyekto. Ano ang propesyonal na gawin?',
+        c:['Magtago at umabsent buong linggo.','Ipaalam agad sa supervisor at mag-propose ng bagong timeline o solusyon.','Blame-in ang mga kasamahan sa team.','Magkunwaring tapos na kahit hindi pa.'],
+        a:1, why:'Katapatan + Problem-Solving: ang propesyonal na tao ay may pananagutan at handang maghanap ng lunas.' }
+    ]
+  },
+  outro:[
+    { sp:'Tagapagsalaysay', t:'Tapos ang huling tanong. Ang pinto sa likod mo ay dahan-dahang bumukas - at naroon ang liwanag ng simula ng iyong career.' },
+    { sp:'Ikaw', t:'Nakuha ko... Lahat ng aral, lahat ng skills, lahat ng values - buo akong tao na handang harapin ang mundo.' }
+  ],
+  gain:{ knowledge:20, skills:20, values:20 }
+},
+/* ---- 12 ---- */
+{
+  n:12, name:'Victory Arch', short:'Victory Arch', kind:'Wakas',
+  theme:'victory',
+  pal:{ sky:'linear-gradient(#ffe9b0,#ffb36b)', cel:'#fff0b0', celGlow:'rgba(255,240,176,.6)',
+        far:'#e0b070', mid:'#c08f5f', ground:'#a87f50', fx:'#fff0c0' },
+  intro:[
+    { sp:'Tagapagsalaysay', t:'At narito ka na. Ang Victory Arch - gintong tarangkahan sa simula ng iyong pangarap. Bawat hakbang mula sa Home Village hanggang dito, may saysay.' },
+    { sp:'Ikaw', t:'Grabe... Parang kahapon, tinutulungan ko lang si Nanay mag-igib ng tubig. Ngayon, eto na ako.' },
+    { sp:'Tagapagsalaysay', t:'Bago mo tanggapin ang korona ng iyong pangarap, may isang huling ritwal - ang Scroll ng Repleksyon. Ito ang buod ng iyong paglalakbay.' }
+  ],
+  act:null,
+  outro:[],
+  gain:{}
+}
+];
+
+/* =========================================================
+   SCREEN MANAGEMENT
+   ========================================================= */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function fade(cb){
+  const f = $('#fader');
+  f.classList.add('on');
+  setTimeout(() => { cb(); setTimeout(() => f.classList.remove('on'), 60); }, 520);
+}
+
+/* =========================================================
+   BACKGROUND SCENES
+   ========================================================= */
+function hillsSVG(color, amp){
+  // simple rolling hills silhouette
+  return `<svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="height:34vh;">
+    <path d="M0 300 L0 ${180-amp} Q125 ${120-amp} 250 ${170-amp} Q375 ${220-amp} 500 ${150-amp} Q625 ${90-amp} 750 ${160-amp} Q875 ${230-amp} 1000 ${140-amp} L1000 300 Z" fill="${color}"/>
+  </svg>`;
+}
+function groundSVG(color){
+  return `<svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="height:100%;">
+    <rect width="1000" height="100" fill="${color}"/>
+    <path d="M0 0 Q250 14 500 4 Q750 -6 1000 10 L1000 0 Z" fill="rgba(255,255,255,.06)"/>
+  </svg>`;
+}
+function propsSVG(theme){
+  switch(theme){
+    case 'village': return `
+      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
+        <g fill="#3a2c22">
+          <path d="M120 260 L120 190 L90 190 L160 140 L230 190 L200 190 L200 260 Z"/>
+          <path d="M420 260 L420 175 L385 175 L460 118 L535 175 L500 175 L500 260 Z"/>
+          <rect x="700" y="185" width="120" height="75"/>
+          <path d="M690 185 L760 135 L830 185 Z"/>
+        </g>
+        <g fill="#ffd98a" opacity=".85">
+          <rect x="145" y="205" width="16" height="16"/><rect x="445" y="195" width="16" height="16"/><rect x="735" y="205" width="16" height="16"/>
+        </g>
+      </svg>`;
+    case 'hood': return `
+      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
+        <g fill="#4a3038">
+          <rect x="80" y="170" width="150" height="90"/><path d="M70 170 L155 115 L240 170 Z"/>
+          <rect x="330" y="150" width="180" height="110"/><path d="M320 150 L420 90 L520 150 Z"/>
+          <rect x="640" y="180" width="140" height="80"/><path d="M630 180 L710 128 L790 180 Z"/>
+        </g>
+        <text x="360" y="215" font-size="20" fill="#ffe9c9" font-family="Georgia" font-style="italic">SARI-SARI STORE</text>
+        <g fill="#ffd98a" opacity=".85">
+          <rect x="115" y="195" width="15" height="15"/><rect x="380" y="180" width="15" height="15"/><rect x="680" y="200" width="15" height="15"/>
+        </g>
+      </svg>`;
+    case 'digital': return `
+      <svg viewBox="0 0 1000 280" preserveAspectRatio="xMidYMax meet" style="height:28vh;">
+        <g fill="#141830">
+          <rect x="100" y="80" width="90" height="200"/><rect x="230" y="130" width="70" height="150"/>
+          <rect x="430" y="50" width="110" height="230"/><rect x="600" y="120" width="80" height="160"/>
+          <rect x="760" y="90" width="95" height="190"/>
+        </g>
+        <g fill="#59e0d0" opacity=".8">
+          <rect x="112" y="100" width="8" height="8"/><rect x="132" y="120" width="8" height="8"/><rect x="152" y="100" width="8" height="8"/>
+          <rect x="448" y="80" width="8" height="8"/><rect x="472" y="105" width="8" height="8"/><rect x="496" y="80" width="8" height="8"/>
+          <rect x="778" y="115" width="8" height="8"/><rect x="800" y="140" width="8" height="8"/>
+        </g>
+        <line x1="485" y1="50" x2="485" y2="18" stroke="#59e0d0" stroke-width="3"/><circle cx="485" cy="14" r="5" fill="#ff6a8a"/>
+      </svg>`;
+    case 'shrine': case 'dawn': return `
+      <svg viewBox="0 0 1000 280" preserveAspectRatio="xMidYMax meet" style="height:28vh;">
+        <g fill="${theme==='shrine' ? '#3f6a5f' : '#7a4a58'}">
+          <rect x="330" y="120" width="340" height="18" rx="6"/>
+          <rect x="352" y="150" width="296" height="12" rx="5"/>
+          <rect x="370" y="120" width="26" height="160"/>
+          <rect x="604" y="120" width="26" height="160"/>
+        </g>
+        <path d="M480 280 L480 240 Q480 218 500 218 Q520 218 520 240 L520 280 Z" fill="#2a2018"/>
+      </svg>`;
+    case 'school': case 'deep': return `
+      <svg viewBox="0 0 1000 270" preserveAspectRatio="xMidYMax meet" style="height:27vh;">
+        <g fill="${theme==='school' ? '#4a4258' : '#1c2038'}">
+          <rect x="300" y="120" width="400" height="150"/>
+          <path d="M290 120 L500 55 L710 120 Z"/>
+          <rect x="470" y="20" width="8" height="45"/>
+          <path d="M478 22 L530 32 L478 44 Z" fill="#c94a4a"/>
+          <rect x="470" y="190" width="60" height="80" fill="${theme==='school' ? '#2e2838' : '#12142a'}"/>
+        </g>
+        <g fill="#ffd98a" opacity=".8">
+          <rect x="340" y="150" width="26" height="30"/><rect x="400" y="150" width="26" height="30"/>
+          <rect x="580" y="150" width="26" height="30"/><rect x="640" y="150" width="26" height="30"/>
+        </g>
+      </svg>`;
+    case 'workshop': case 'forge': return `
+      <svg viewBox="0 0 1000 260" preserveAspectRatio="xMidYMax meet" style="height:26vh;">
+        <g fill="#2a2018">
+          <rect x="280" y="140" width="440" height="120"/>
+          <path d="M270 140 L500 70 L730 140 Z"/>
+          <rect x="460" y="180" width="80" height="80" fill="#ffb060" opacity=".55"/>
+        </g>
+        <circle cx="800" cy="200" r="42" fill="none" stroke="#4a3826" stroke-width="12"/>
+        <g fill="#4a3826">
+          <rect x="792" y="148" width="16" height="20"/><rect x="792" y="232" width="16" height="20"/>
+          <rect x="748" y="192" width="20" height="16"/><rect x="832" y="192" width="20" height="16"/>
+        </g>
+        <line x1="200" y1="120" x2="200" y2="260" stroke="#2a2018" stroke-width="10"/>
+        <path d="M200 120 L260 145 L200 170 Z" fill="#ffb060" opacity=".7"/>
+      </svg>`;
+    case 'plaza': return `
+      <svg viewBox="0 0 1000 270" preserveAspectRatio="xMidYMax meet" style="height:27vh;">
+        <g fill="#5a4a30">
+          <rect x="120" y="150" width="24" height="120"/><circle cx="132" cy="130" r="42"/>
+          <rect x="860" y="150" width="24" height="120"/><circle cx="872" cy="130" r="42"/>
+          <rect x="420" y="110" width="160" height="160" fill="#6a5638"/>
+          <path d="M405 110 L500 60 L595 110 Z" fill="#5a4a30"/>
+        </g>
+        <rect x="455" y="160" width="90" height="50" fill="#ffd98a" opacity=".7"/>
+      </svg>`;
+    case 'exam': return `
+      <svg viewBox="0 0 1000 290" preserveAspectRatio="xMidYMax meet" style="height:29vh;">
+        <g fill="#181c30">
+          <rect x="420" y="60" width="160" height="230"/>
+          <path d="M410 60 L500 15 L590 60 Z"/>
+          <circle cx="500" cy="120" r="34" fill="#232741" stroke="#e0a0a0" stroke-width="4"/>
+          <line x1="500" y1="120" x2="500" y2="100" stroke="#e0a0a0" stroke-width="3"/>
+          <line x1="500" y1="120" x2="514" y2="126" stroke="#e0a0a0" stroke-width="3"/>
+        </g>
+        <rect x="470" y="200" width="60" height="90" fill="#0e1020"/>
+      </svg>`;
+    case 'victory': return `
+      <svg viewBox="0 0 1000 300" preserveAspectRatio="xMidYMax meet" style="height:30vh;">
+        <g fill="#b8863a">
+          <rect x="330" y="90" width="46" height="210"/><rect x="624" y="90" width="46" height="210"/>
+          <rect x="310" y="70" width="380" height="30" rx="8"/>
+          <rect x="340" y="112" width="320" height="14" rx="6"/>
+        </g>
+        <circle cx="500" cy="52" r="14" fill="#fff0b8"/>
+        <path d="M470 300 L470 220 Q500 190 530 220 L530 300 Z" fill="#8a6a30"/>
+      </svg>`;
+  }
+  return '';
+}
+
+function setScene(lvl){
+  const p = lvl.pal;
+  $('#ly-sky').style.background = p.sky;
+  const sun = $('#ly-celestial .sun');
+  sun.style.background = p.cel;
+  sun.style.boxShadow = `0 0 60px 24px ${p.celGlow}`;
+  $('#ly-far').innerHTML = hillsSVG(p.far, 0);
+  $('#ly-mid').innerHTML = hillsSVG(p.mid, 20) + propsSVG(lvl.theme);
+  $('#ly-ground').innerHTML = groundSVG(p.ground);
+  FX.color = p.fx;
+}
+
+/* parallax */
+document.addEventListener('mousemove', e => {
+  const nx = (e.clientX / window.innerWidth - .5);
+  const ny = (e.clientY / window.innerHeight - .5);
+  $('#ly-far').style.transform = `translate(${nx*-12}px, ${ny*-4}px)`;
+  $('#ly-mid').style.transform = `translate(${nx*-24}px, ${ny*-8}px)`;
+  $('#ly-celestial').style.transform = `translate(${nx*-8}px, ${ny*-3}px)`;
+});
+
+/* =========================================================
+   PARTICLES (canvas)
+   ========================================================= */
+const FX = { color:'#ffe9b0', parts:[], cv:null, ctx:null };
+function initFX(){
+  FX.cv = $('#fx'); FX.ctx = FX.cv.getContext('2d');
+  resizeFX(); window.addEventListener('resize', resizeFX);
+  for(let i=0;i<45;i++) FX.parts.push(newPart(true));
+  requestAnimationFrame(fxLoop);
+}
+function resizeFX(){ FX.cv.width = innerWidth; FX.cv.height = innerHeight; }
+function newPart(anywhere){
+  return { x:Math.random()*innerWidth, y:anywhere?Math.random()*innerHeight:innerHeight+10,
+    r:.8+Math.random()*2.2, vy:.15+Math.random()*.4, vx:(Math.random()-.5)*.25,
+    a:.15+Math.random()*.4, ph:Math.random()*Math.PI*2 };
+}
+function fxLoop(t){
+  const c = FX.ctx;
+  c.clearRect(0,0,FX.cv.width,FX.cv.height);
+  for(let i=0;i<FX.parts.length;i++){
+    const p = FX.parts[i];
+    p.y -= p.vy; p.x += p.vx + Math.sin(t/1400+p.ph)*.18;
+    if(p.y < -12) FX.parts[i] = newPart(false);
+    c.globalAlpha = p.a * (0.7 + 0.3*Math.sin(t/900+p.ph));
+    c.fillStyle = FX.color;
+    c.beginPath(); c.arc(p.x,p.y,p.r,0,Math.PI*2); c.fill();
+  }
+  c.globalAlpha = 1;
+  requestAnimationFrame(fxLoop);
+}
+
+/* =========================================================
+   DIALOGUE RUNNER
+   ========================================================= */
+let dlgQueue = [], dlgIdx = 0, dlgDone = null, typing = null, typedFull = '';
+function playDialogue(lines, done){
+  dlgQueue = lines; dlgIdx = 0; dlgDone = done;
+  $('#dialogue').style.display = 'block';
+  showLine();
+}
+function showLine(){
+  const line = dlgQueue[dlgIdx];
+  $('#dlg-speaker').textContent = line.sp;
+  typedFull = line.t;
+  const el = $('#dlg-text');
+  el.textContent = '';
+  clearInterval(typing);
+  let i = 0;
+  typing = setInterval(() => {
+    el.textContent = typedFull.slice(0, ++i);
+    if(i >= typedFull.length) clearInterval(typing);
+  }, 22);
+}
+function advanceDialogue(){
+  const el = $('#dlg-text');
+  if(el.textContent.length < typedFull.length){
+    clearInterval(typing); el.textContent = typedFull; return;
+  }
+  dlgIdx++;
+  if(dlgIdx >= dlgQueue.length){
+    $('#dialogue').style.display = 'none';
+    const cb = dlgDone; dlgDone = null;
+    if(cb) cb();
+  } else showLine();
+}
+$('#dialogue').addEventListener('click', advanceDialogue);
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space' && $('#screen-level').classList.contains('active') && $('#dialogue').style.display !== 'none'){
+    e.preventDefault(); advanceDialogue();
+  }
+});
+
+/* =========================================================
+   ACTIVITIES
+   ========================================================= */
+const Act = { qs:[], qi:0, timer:null, timeLeft:0, onDone:null };
+
+function startActivity(lvl, done){
+  Act.onDone = done;
+  $('#activity').classList.add('active');
+  $('#act-feedback').textContent = '';
+  $('#act-next-row').classList.remove('show');
+  const a = lvl.act;
+  $('#act-title').textContent = a.title;
+  if(a.type === 'quiz'){ Act.qs = a.qs; Act.qi = 0; renderQuestion(a); }
+  else if(a.type === 'match') renderMatch(a);
+  else if(a.type === 'order') renderOrder(a);
+}
+
+function finishActivity(){
+  $('#activity').classList.remove('active');
+  const cb = Act.onDone; Act.onDone = null;
+  if(cb) cb();
+}
+
+/* --- quiz --- */
+function renderQuestion(a){
+  clearInterval(Act.timer);
+  const q = Act.qs[Act.qi];
+  $('#act-count').textContent = `Tanong ${Act.qi+1} ng ${Act.qs.length}`;
+  $('#act-feedback').textContent = '';
+  $('#act-next-row').classList.remove('show');
+
+  const wrap = $('#timer-wrap');
+  if(a.timer){
+    wrap.style.display = 'block';
+    startTimer(a.timer);
+  } else wrap.style.display = 'none';
+
+  const body = $('#act-body');
+  body.innerHTML = `<div class="act-q">${q.q}</div><div class="choices"></div>`;
+  const ch = body.querySelector('.choices');
+  const isFactFake = a.style === 'factfake';
+  q.c.forEach((txt, idx) => {
+    const b = document.createElement('button');
+    b.className = 'choice';
+    b.textContent = (isFactFake ? '' : String.fromCharCode(65+idx) + '. ') + txt;
+    b.onclick = () => answer(idx, b, a);
+    ch.appendChild(b);
+  });
+}
+function startTimer(sec){
+  Act.timeLeft = sec;
+  const bar = $('#timer-bar');
+  bar.style.width = '100%'; bar.classList.remove('low');
+  const t0 = Date.now();
+  Act.timer = setInterval(() => {
+    const frac = 1 - (Date.now()-t0)/(sec*1000);
+    bar.style.width = Math.max(0, frac*100) + '%';
+    if(frac < .3) bar.classList.add('low');
+    if(frac <= 0){ clearInterval(Act.timer); answer(-1, null, LEVELS[10].act); }
+  }, 50);
+}
+function answer(idx, btn, a){
+  clearInterval(Act.timer);
+  const q = Act.qs[Act.qi];
+  const buttons = document.querySelectorAll('#act-body .choice');
+  buttons.forEach(b => b.disabled = true);
+  const fb = $('#act-feedback');
+  if(idx === q.a){
+    if(btn) btn.classList.add('correct');
+    fb.textContent = 'Tama! ' + q.why;
+  } else {
+    if(btn) btn.classList.add('wrong');
+    buttons[q.a].classList.add('correct');
+    fb.textContent = (idx === -1 ? 'Ubos na ang oras! ' : 'Hindi yan... ') + q.why;
+  }
+  $('#act-next-btn').textContent = (Act.qi+1 >= Act.qs.length) ? 'Tapos na' : 'Sunod na tanong';
+  $('#act-next-row').classList.add('show');
+}
+$('#act-next-btn').addEventListener('click', () => {
+  Act.qi++;
+  if(Act.qi >= Act.qs.length) finishActivity();
+  else renderQuestion(LEVELS[currentLevel].act);
+});
+
+/* --- matching --- */
+let matchSel = null, matchLeft = 0;
+function renderMatch(a){
+  $('#act-count').textContent = `Itugma ang mga pares - ${a.pairs.length} pares`;
+  matchSel = null; matchLeft = a.pairs.length;
+  const body = $('#act-body');
+  body.innerHTML = `<div class="match-grid">
+    <div class="match-col" id="mcol-l"></div>
+    <div class="match-col" id="mcol-r"></div></div>`;
+  const L = $('#mcol-l'), R = $('#mcol-r');
+  const rights = a.pairs.map((p,i)=>({txt:p.r, i}));
+  // shuffle right column
+  for(let i=rights.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rights[i],rights[j]]=[rights[j],rights[i]]; }
+  a.pairs.forEach((p,i)=>{
+    const bl = document.createElement('button');
+    bl.className='match-item'; bl.textContent=p.l; bl.dataset.i=i;
+    bl.onclick=()=>pickLeft(bl,a);
+    L.appendChild(bl);
+  });
+  rights.forEach(r=>{
+    const br = document.createElement('button');
+    br.className='match-item'; br.textContent=r.txt; br.dataset.i=r.i;
+    br.onclick=()=>pickRight(br,a);
+    R.appendChild(br);
+  });
+}
+function pickLeft(btn,a){
+  if(btn.classList.contains('paired')) return;
+  document.querySelectorAll('#mcol-l .match-item').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); matchSel = btn;
+}
+function pickRight(btn,a){
+  if(!matchSel || btn.classList.contains('paired')) return;
+  if(btn.dataset.i === matchSel.dataset.i){
+    btn.classList.add('paired'); matchSel.classList.add('paired');
+    matchSel.classList.remove('sel'); matchSel=null;
+    matchLeft--;
+    $('#act-feedback').textContent = `Maganda! ${matchLeft} na lang.`;
+    if(matchLeft===0){
+      $('#act-feedback').textContent = 'Napakalusog ng isip mo! Complete!';
+      setTimeout(finishActivity, 900);
+    }
+  } else {
+    btn.classList.add('shake'); matchSel.classList.add('shake');
+    $('#act-feedback').textContent = 'Hindi yan ang tamang tugma. Subukan muli.';
+    setTimeout(()=>{ btn.classList.remove('shake'); if(matchSel) matchSel.classList.remove('shake'); }, 400);
+  }
+}
+
+/* --- ordering --- */
+let orderNext = 0;
+function renderOrder(a){
+  orderNext = 0;
+  $('#act-count').textContent = 'I-click ang mga hakbang sa TAMANG pagkakasunod-sunod';
+  const body = $('#act-body');
+  body.innerHTML = '<div class="order-list"></div>';
+  const list = body.querySelector('.order-list');
+  const items = a.steps.map((s,i)=>({s,i}));
+  for(let i=items.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [items[i],items[j]]=[items[j],items[i]]; }
+  items.forEach(it=>{
+    const b=document.createElement('button');
+    b.className='order-item'; b.textContent=it.s; b.dataset.i=it.i;
+    b.onclick=()=>{
+      if(b.classList.contains('locked')) return;
+      if(it.i===orderNext){
+        b.classList.add('locked'); orderNext++;
+        $('#act-feedback').textContent='';
+        if(orderNext===a.steps.length){
+          $('#act-feedback').textContent='Perpekto! Tamang proseso.';
+          setTimeout(finishActivity, 900);
+        }
+      } else {
+        b.classList.add('shake');
+        $('#act-feedback').textContent='Hindi pa yan ang susunod na hakbang. Isipin muna.';
+        setTimeout(()=>b.classList.remove('shake'),400);
+      }
+    };
+    list.appendChild(b);
+  });
+}
+
+/* =========================================================
+   MAP
+   ========================================================= */
+const NODE_POS = [
+  [10,80],[21,68],[32,77],[43,62],[53,72],[62,57],[71,67],[79,52],[87,63],[91,44],[83,30],[69,20]
+];
+function renderMap(){
+  const wrap = $('#map-wrap');
+  wrap.querySelectorAll('.node').forEach(n=>n.remove());
+  const svg = $('#map-path');
+  const pts = NODE_POS.map(p=>p.join(',')).join(' ');
+  svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="rgba(255,235,200,.35)" stroke-width=".7" stroke-dasharray="2 2" stroke-linecap="round"/>`;
+
+  LEVELS.forEach((lvl,i)=>{
+    const st = S.done.includes(lvl.n) ? 'done' : (lvl.n <= S.unlocked ? 'avail' : 'locked');
+    const b = document.createElement('button');
+    b.className = 'node ' + st;
+    b.style.left = NODE_POS[i][0]+'%';
+    b.style.top = NODE_POS[i][1]+'%';
+    b.innerHTML = `<span class="node-dot">${st==='done' ? '&#10003;' : (st==='locked' ? '&#128274;' : lvl.n)}</span>
+      <span class="node-label">${lvl.short}</span>`;
+    if(st!=='locked') b.onclick = ()=>enterLevel(i);
+    wrap.appendChild(b);
+  });
+
+  $('#map-stats').innerHTML =
+    `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
+    `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
+    `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
+    S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+}
+
+/* =========================================================
+   LEVEL FLOW
+   ========================================================= */
+let currentLevel = 0;
+function enterLevel(i){
+  currentLevel = i;
+  const lvl = LEVELS[i];
+  fade(()=>{
+    show('#screen-level');
+    setScene(lvl);
+    updateHUD();
+    playDialogue(lvl.intro, ()=>{
+      if(lvl.act) startActivity(lvl, ()=>playDialogue(lvl.outro, ()=>showReward(lvl)));
+      else showReward(lvl);
+    });
+  });
+}
+function updateHUD(){
+  $('#hud').innerHTML =
+    `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
+    `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
+    `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
+    S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+}
+function showReward(lvl){
+  if(!S.done.includes(lvl.n)){
+    S.done.push(lvl.n);
+    if(S.unlocked < lvl.n+1 && lvl.n < 12) S.unlocked = lvl.n+1;
+    if(lvl.gain.knowledge) S.knowledge += lvl.gain.knowledge;
+    if(lvl.gain.skills) S.skills += lvl.gain.skills;
+    if(lvl.gain.values) S.values += lvl.gain.values;
+    if(lvl.gain.passive && !S.passives.includes(lvl.gain.passive)) S.passives.push(lvl.gain.passive);
+    saveState();
+  }
+  let gainsHtml = '';
+  if(lvl.gain.knowledge) gainsHtml += `<div class="gain-line">+${lvl.gain.knowledge} <b>Kaalamán</b></div>`;
+  if(lvl.gain.skills) gainsHtml += `<div class="gain-line">+${lvl.gain.skills} <b>Kasanayan</b></div>`;
+  if(lvl.gain.values) gainsHtml += `<div class="gain-line">+${lvl.gain.values} <b>Pagpapahalaga</b></div>`;
+  if(lvl.gain.passive) gainsHtml += `<div class="passive-badge">&#9733; Unlocked: ${lvl.gain.passive}</div>`;
+  $('#reward-title').textContent = `Natapos mo ang Antas ${lvl.n}: ${lvl.name}`;
+  $('#reward-gains').innerHTML = gainsHtml || '<div class="gain-line">Ang huling hakbay...</div>';
+  $('#reward-btn').textContent = (lvl.n === 12) ? 'Harapin ang Wakas' : 'Balik sa Mapa';
+  $('#reward-overlay').classList.add('active');
+}
+$('#reward-btn').addEventListener('click', ()=>{
+  $('#reward-overlay').classList.remove('active');
+  const lvl = LEVELS[currentLevel];
+  if(lvl.n === 12){ showEnding(); return; }
+  fade(()=>{ show('#screen-map'); renderMap(); });
+});
+
+/* =========================================================
+   ENDING
+   ========================================================= */
+function showEnding(){
+  fade(()=>{
+    show('#screen-end');
+    $('#end-career').textContent = `Ang iyong pangarap: ${S.career || 'Pinapangarap na Propesyonal'}`;
+    $('#reflection-text').textContent =
+      `Hindi naging madali ang paglalakbay na ito, pero bawat hakbang ay may naituro - mula sa aral ng tahanan at tambayan ng barkada, hanggang sa klasrum, workshop, at plaza ng bayan. ` +
+      `Natutunan kong ang edukasyon ay hindi lang grades o diploma; ito ang hubog ng aking isip, kasanayan, at pagkatao. ` +
+      `Sa tulong ng pamilya, guro, trainer, at komunidad, handa na akong harapin ang mundo bilang isang ${S.career || 'propesyonal'}. ` +
+      `Ang edukasyon ang tanglaw ko tungo sa aking pangarap - at ang pag-aaral ay hindi natatapos, ito'y patuloy na biyahe habambuhay.`;
+    $('#end-stats').innerHTML =
+      `<span class="stat-chip">Kaalamán <b>${S.knowledge}</b></span>`+
+      `<span class="stat-chip">Kasanayan <b>${S.skills}</b></span>`+
+      `<span class="stat-chip">Pagpapahalaga <b>${S.values}</b></span>`+
+      S.passives.map(p=>`<span class="stat-chip passive-chip">&#9733; ${p}</span>`).join('');
+    const sc = $('#reflection-scroll');
+    sc.classList.remove('open');
+    setTimeout(()=>sc.classList.add('open'), 700);
+  });
+}
+
+/* =========================================================
+   TITLE / NEW GAME / CONTINUE
+   ========================================================= */
+$('#btn-new').addEventListener('click', ()=>{
+  const grid = $('#career-grid');
+  grid.innerHTML = '';
+  CAREERS.forEach(c=>{
+    const b = document.createElement('button');
+    b.className='career-opt'; b.textContent=c;
+    b.onclick=()=>{
+      S = freshState(); S.career = c; saveState();
+      $('#career-modal').classList.remove('active');
+      fade(()=>{ show('#screen-map'); renderMap(); });
+    };
+    grid.appendChild(b);
+  });
+  $('#career-modal').classList.add('active');
+});
+$('#btn-continue').addEventListener('click', ()=>{
+  S = loadState();
+  fade(()=>{ show('#screen-map'); renderMap(); });
+});
+if(loadState()) $('#btn-continue').disabled = false;
+
+$('#quit-btn').addEventListener('click', ()=>{
+  clearInterval(Act.timer);
+  $('#activity').classList.remove('active');
+  $('#dialogue').style.display = 'none';
+  dlgDone = null; dlgQueue = [];
+  fade(()=>{ show('#screen-map'); renderMap(); });
+});
+
+/* boot */
+initFX();
+</script>
+</body>
+</html>
