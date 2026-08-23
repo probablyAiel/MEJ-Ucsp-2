@@ -1,6 +1,6 @@
 # Lakbay Kinabukasan
 
-My second project for UCSP 2. It's basically a game where you travel around answering questions about Filipino values, careers, education, and being a good citizen — all in one HTML file.
+My second project for UCSP 2. It's basically a game where you travel around answering questions about Filipino values, careers, education, and being a good citizen all in one HTML file.
 
 ## How to run
 
